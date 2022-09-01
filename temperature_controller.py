@@ -3,41 +3,37 @@ from time import sleep
 from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting
 import my_telegram_bots
 import time
-from TheSetup import connect_me_with_the_setup
 from simple_pid import PID # https://github.com/m-lundberg/simple-pid
-import os
 
-def temperature_controller(set_point_celsius:float):
+def temperature_controller(set_point_celsius:float, the_setup):
 	PID_SAMPLE_TIME = 1
-	NAME_TO_ACCESS_TO_THE_SETUP = f'temperature PID controller {os.getpid()}'
+	
 
 	temperature_pid = PID(-.5,-.1,-2)
 	temperature_pid.sample_time = PID_SAMPLE_TIME
 	temperature_pid.output_limits = (0, 4.2)
 	temperature_pid.setpoint = 15
 
-	the_setup = connect_me_with_the_setup()
-
 	reporter = telegram_reporter = TelegramReporter(
 		telegram_token = my_telegram_bots.robobot.token,
 		telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 	)
 
-	with the_setup.hold_temperature_control(NAME_TO_ACCESS_TO_THE_SETUP):
+	with the_setup.hold_temperature_control():
 		try:
-			the_setup.set_peltier_status('on', who=NAME_TO_ACCESS_TO_THE_SETUP)
+			the_setup.set_peltier_status('on')
 			while True:
 				new_current = temperature_pid(the_setup.measure_temperature())
-				the_setup.set_peltier_current(new_current, who=NAME_TO_ACCESS_TO_THE_SETUP)
+				the_setup.set_peltier_current(new_current)
 				time.sleep(PID_SAMPLE_TIME)
 		except Exception as e:
 			reporter.send_message(f'🔥 Temperature controller crashed!')
 			raise e
 		finally:
-			the_setup.set_peltier_status('off', who=NAME_TO_ACCESS_TO_THE_SETUP)
+			the_setup.set_peltier_status('off')
 
-def monitor_temperature_control():
-	s = connect_me_with_the_setup()
+def monitor_temperature_control(the_setup):
+	s = the_setup
 
 	while True:
 		print(f'{s.measure_temperature():.2f} °C, {s.measure_humidity():.2f}%RH | {s.measure_peltier_current():.2f} A, {s.measure_peltier_voltage():.2f} V, {s.get_peltier_status()}')
@@ -45,6 +41,8 @@ def monitor_temperature_control():
 
 if __name__=='__main__':
 	import argparse
+	import os
+	from TheSetup import connect_me_with_the_setup
 	
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
@@ -60,10 +58,12 @@ if __name__=='__main__':
 		action = 'store_true'
 	)
 	
+	the_setup = connect_me_with_the_setup(f'temperature PID controller {os.getpid()}')
+	
 	args = parser.parse_args()
 	if args.controller == True:
-		temperature_controller(15)
+		temperature_controller(15, the_setup)
 	elif args.monitor == True:
-		monitor_temperature_control()
+		monitor_temperature_control(the_setup)
 	else:
 		print('Nothing is done...')

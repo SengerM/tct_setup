@@ -590,7 +590,36 @@ class TheTCTSetupWithNamedLocks(TheTCTSetup):
 		with self._temperature_system_holding_Lock(who):
 			super().set_peltier_status(status=status)
 	
-def connect_me_with_the_setup():
+class WhoWrapper:
+	# https://stackoverflow.com/a/73573455/8849755
+	"""This class was designed to wrap `TheTCTSetupWithNamedLocks`. If you
+	look into the definition of that class you will see that many methods 
+	have an argument that is `who` which specifies the name of whoever
+	wants to modify the setup and has locks to avoid a mess. If that
+	class is used, each time one of those methods is called the `who` argument
+	must be passed, which is annoying. This class wraps the other to automate
+	that task. You only give the `who` argument once when creating the
+	wrapper and then it will be passed automatically to all methods that
+	need it."""
+	def __init__(self, object_to_wrap, who:str):
+		self._who = who
+		self._wrapped_object = object_to_wrap
+
+	def __getattr__(self, __name: str):
+		attr = getattr(self._wrapped_object, __name)
+		if not callable(attr):
+			return attr
+		def wrapped(*args, **kwargs):
+			try:
+				return attr(who=self._who, *args, **kwargs)
+			except TypeError as e:
+				if all([s in str(e) for s in {'who','got an unexpected keyword argument'}]):
+					return attr(*args, **kwargs)
+				else:
+					raise e
+		return wrapped
+	
+def connect_me_with_the_setup(who:str):
 	class TheSetup(BaseManager):
 		pass
 
@@ -598,7 +627,7 @@ def connect_me_with_the_setup():
 	m = TheSetup(address=('', 50000), authkey=b'abracadabra')
 	m.connect()
 	the_setup = m.get_the_setup()
-	return the_setup
+	return WhoWrapper(object_to_wrap=the_setup, who=who)
 
 if __name__=='__main__':
 	from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting

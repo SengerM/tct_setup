@@ -6,16 +6,10 @@ import datetime
 from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper # https://github.com/SengerM/huge_dataframe
 from contextlib import nullcontext
 from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting
+import threading
+from parse_waveforms import parse_waveforms
 
-def TCT_1D_scan(
-		bureaucrat:RunBureaucrat,
-		the_setup,
-		positions:list,
-		acquire_channels:list,
-		n_triggers_per_position:int=1,
-		silent=True,
-		reporter:TelegramReporter=None,
-	):
+def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
 	"""Perform a 1D scan with the TCT setup.
 	
 	Arguments
@@ -126,6 +120,40 @@ def TCT_1D_scan(
 										
 										n_waveform += 1
 
+def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
+	"""Perform a `TCT_1D_scan` and parse in parallel."""
+	Ernestino = bureaucrat
+	TCT_still_scanning = True
+	
+	def parsing_thread_function():
+		while TCT_still_scanning:
+			try:
+				parse_waveforms(
+					bureaucrat = Ernestino, 
+					name_of_task_that_produced_the_waveforms_to_parse = 'TCT_1D_scan',
+					silent = True, 
+					continue_from_where_we_left_last_time = True,
+				)
+			except:
+				pass
+			sleep(1)
+	
+	parsing_thread = threading.Thread(target=parsing_thread_function)
+	
+	try:
+		parsing_thread.start()
+		TCT_1D_scan(
+			bureaucrat = Ernestino, 
+			the_setup = the_setup, 
+			positions = positions, 
+			acquire_channels = acquire_channels, 
+			n_triggers_per_position = n_triggers_per_position, 
+			silent = silent,
+			reporter = reporter,
+		)
+	finally:
+		TCT_still_scanning = False
+
 ########################################################################
 
 # The following things are defined here such that they can be imported from other scripts.
@@ -159,11 +187,15 @@ if __name__ == '__main__':
 		for i in range(len(y)):
 			positions.append( [ x[i],y[i],z[i] ] )
 		
-		TCT_1D_scan(
+		scan_and_parse(
 			bureaucrat = Mariano,
 			the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}'),
 			positions = positions,
 			n_triggers_per_position = N_TRIGGERS_PER_POSITION,
 			acquire_channels = [1,4],
 			silent = False,
+			reporter = TelegramReporter(
+				telegram_token = my_telegram_bots.robobot.token, 
+				telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+			),
 		)

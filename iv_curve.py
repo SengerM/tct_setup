@@ -12,16 +12,14 @@ from progressreporting.TelegramProgressReporter import TelegramReporter # https:
 def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current_limit_amperes:float, n_measurements_per_voltage:int, time_between_each_measurement_seconds:float, time_after_changing_voltage_seconds:float, silent:bool=True, reporter:TelegramReporter=None):
 	"""Perform an IV curve measurement using the high voltage power supply.
 	
-	Parameters
+	Arguments
 	----------
-	measurement_base_path: Path
-		Path to where to store the measurement, including as the last 
-		element the measurement name itself.
-	
-	voltages: list of float
-		Voltages at which to measure.
+	bureaucrat: RunBureaucrat
+		The bureaucrat that will handle the measurement.
 	the_setup:
 		An object to control the hardware.
+	voltages: list of float
+		Voltages at which to measure.
 	current_limit_amperes: float
 		Value for the limit of current in Ampere.
 	n_measurements_per_voltage: int
@@ -113,7 +111,6 @@ if __name__ == '__main__':
 	VOLTAGES = np.linspace(0,166,11)
 	
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
-		print(iv_curves_task_bureaucrat.path_to_directory_of_my_task)
 		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + input('Measurement name? ').replace(' ','_'))
 		
 		iv_curve_measure(

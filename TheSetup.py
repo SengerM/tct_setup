@@ -163,8 +163,8 @@ class TheTCTSetup:
 				self._LeCroy.set_trig_level('ext', -175e-3) # Totally empiric.
 				self._LeCroy.set_trig_coupling('ext', 'DC')
 				self._LeCroy.set_trig_slope('ext', 'negative')
-				# self._LeCroy.set_tdiv('2us')
-				# self._LeCroy.set_trig_delay(-43e-9) # Totally empiric.
+				self._LeCroy.set_tdiv('20ns')
+				self._LeCroy.set_trig_delay(-30e-9) # Totally empiric.
 			elif hasattr(self, '_drs4_evaluation_board'):
 				self._drs4_evaluation_board.set_sampling_frequency(Hz=5e9)
 				self._drs4_evaluation_board.set_transparent_mode('on')

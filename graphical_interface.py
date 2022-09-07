@@ -229,33 +229,20 @@ class graphical_ParticularsLaserStatusDisplay(tk.Frame):
 		self.frequency_label = tk.Label(frame, text = '?')
 		self.frequency_label.grid()
 		
-		self.automatic_display_update('on')
+		def thread_function():
+			while True:
+				try:
+					self.update_display()
+				except:
+					pass
+				time.sleep(1)
+		
+		threading.Thread(target=thread_function, daemon=True).start()
 		
 	def update_display(self):
 		self.status_label.config(text=f'{repr(self.the_setup.get_laser_status())}')
 		self.DAC_label.config(text=f'{self.the_setup.get_laser_DAC()}')
 		self.frequency_label.config(text=f'not implemented 😥')
-	
-	def automatic_display_update(self, status):
-		if not isinstance(status, str):
-			raise TypeError(f'<status> must be a string, received {status} of type {type(status)}.')
-		if status.lower() not in {'on','off'}:
-			raise ValueError(f'<status> must be either "on" or "off", received {status}.')
-		self._automatic_display_update_status = status
-		
-		def thread_function():
-			while self._automatic_display_update_status == 'on':
-				try:
-					self.update_display()
-				except:
-					pass
-				time.sleep(.6)
-		
-		self._automatic_display_update_thread = threading.Thread(target = thread_function)
-		self._automatic_display_update_thread.start()
-	
-	def terminate(self):
-		self.automatic_display_update('off')
 	
 class graphical_ParticularsLaserControlInput(tk.Frame):
 	def __init__(self, parent, the_setup, *args, **kwargs):
@@ -350,6 +337,43 @@ class LaserControllerGraphicalInterface_main(tk.Frame):
 	def terminate(self):
 		self._display.terminate()
 
+class TemperatureMonitor(tk.Frame):
+	def __init__(self, parent, the_setup, *args, **kwargs):
+		tk.Frame.__init__(self, parent, *args, **kwargs)
+		self.parent = parent
+		
+		self.the_setup = the_setup
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'Temperature: ').grid()
+		self.temperature_label = tk.Label(frame, text = '?')
+		self.temperature_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = ' Humidity: ').grid()
+		self.humidity_label = tk.Label(frame, text = '?')
+		self.humidity_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = ' Peltier: ').grid()
+		self.peltier_IV_label = tk.Label(frame, text = '?')
+		self.peltier_IV_label.grid()
+		
+		def thread_function():
+			while True:
+				time.sleep(1)
+				self.update_display()
+		
+		threading.Thread(target=thread_function, daemon=True).start()
+	
+	def update_display(self):
+		self.temperature_label.config(text=f'{self.the_setup.measure_temperature():.2f} °C')
+		self.humidity_label.config(text=f'{self.the_setup.measure_humidity():.2f} %RH')
+		self.peltier_IV_label.config(text=f'{self.the_setup.get_peltier_status()}, {self.the_setup.measure_peltier_voltage():.2f} V, {self.the_setup.measure_peltier_current():.2f} A')
+
 if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
@@ -375,6 +399,14 @@ if __name__ == '__main__':
 	laser_controller_widget.grid(
 		row = 0,
 		column = 1,
+		padx = (99,0),
+		sticky = 'n',
+	)
+	
+	temperature_monitor = TemperatureMonitor(widgets_frame, the_setup)
+	temperature_monitor.grid(
+		row = 0,
+		column = 2,
 		padx = (99,0),
 		sticky = 'n',
 	)

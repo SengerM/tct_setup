@@ -3,11 +3,14 @@ from pathlib import Path
 from time import sleep
 import pandas
 import datetime
-from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper # https://github.com/SengerM/huge_dataframe
+from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper, load_whole_dataframe # https://github.com/SengerM/huge_dataframe
 from contextlib import nullcontext
 from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting
 import threading
 from parse_waveforms import parse_waveforms
+import plotly.express as px
+from utils import integrate_distance_given_path, kMAD
+from grafica.plotly_utils.utils import line
 
 def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
 	"""Perform a 1D scan with the TCT setup.
@@ -120,6 +123,52 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 										
 										n_waveform += 1
 
+def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:bool=True, draw_distributions:bool=False):
+	Néstor = bureaucrat
+	
+	Néstor.check_these_tasks_were_run_successfully(['TCT_1D_scan','parse_waveforms'])
+	
+	with Néstor.handle_task('plot_parsed_data_from_TCT_1D_scan') as Néstors_employee:
+		parsed_data_df = load_whole_dataframe(Néstor.path_to_directory_of_task('parse_waveforms')/'parsed_from_waveforms.sqlite')
+		measured_data_df = load_whole_dataframe(Néstor.path_to_directory_of_task('TCT_1D_scan')/'measured_data.sqlite')
+		
+		data_df = measured_data_df.merge(parsed_data_df, left_index=True, right_index=True)
+		
+		data_df['Distance (m)'] = integrate_distance_given_path(list(data_df[['x (m)', 'y (m)', 'z (m)']].to_numpy()))
+		
+		averaged_in_position_df = data_df.groupby(['n_position','n_channel','n_pulse']).agg([np.nanmedian, kMAD])
+		averaged_in_position_df.columns = [f'{col[0]} {col[1]}' for col in averaged_in_position_df.columns]
+
+		if draw_main_plots:
+			for var in {'Amplitude (V)','Collected charge (V s)','SNR'}:
+				fig = line(
+					data_frame = averaged_in_position_df.reset_index(drop=False),
+					x = 'Distance (m) nanmedian',
+					y = f'{var} nanmedian',
+					error_y = f'{var} kMAD',
+					error_y_mode = 'bands',
+					color = 'n_channel',
+					line_dash = 'n_pulse',
+				)
+				fig.write_html(
+					str(Néstors_employee.path_to_directory_of_my_task/f'{var} vs distance.html'),
+					include_plotlyjs = 'cdn',
+				)
+		
+		if draw_distributions:
+			store_distributions_here = Néstors_employee.path_to_directory_of_my_task/'distributions'
+			store_distributions_here.mkdir(exist_ok=True)
+			for var in {'Humidity (%RH)','Temperature (°C)',}:
+				fig = px.ecdf(
+					data_df.loc[data_df[var].notna()],
+					x = var,
+					title = f'{var} distribution<br><sup>Run: {Néstor.run_name}</sup>',
+				)
+				fig.write_html(
+					str(store_distributions_here/var) + '.html',
+					include_plotlyjs = 'cdn',
+				)
+
 def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
 	"""Perform a `TCT_1D_scan` and parse in parallel."""
 	Ernestino = bureaucrat
@@ -153,6 +202,10 @@ def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_
 		)
 	finally:
 		TCT_still_scanning = False
+	
+	while parsing_thread.is_alive():
+		sleep(1)
+	plot_parsed_data_from_TCT_1D_scan(bureaucrat=Ernestino)
 
 ########################################################################
 
@@ -167,7 +220,7 @@ SCAN_STEP = 10e-6 # meters
 SCAN_LENGTH = 333e-6 # meters
 SCAN_ANGLE_DEG = 90 # deg
 LASER_DAC = 0
-N_TRIGGERS_PER_POSITION = 55
+N_TRIGGERS_PER_POSITION = 5
 
 if __name__ == '__main__':
 	import numpy as np
@@ -187,15 +240,21 @@ if __name__ == '__main__':
 		for i in range(len(y)):
 			positions.append( [ x[i],y[i],z[i] ] )
 		
-		scan_and_parse(
-			bureaucrat = Mariano,
-			the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}'),
-			positions = positions,
-			n_triggers_per_position = N_TRIGGERS_PER_POSITION,
-			acquire_channels = [1,4],
-			silent = False,
-			reporter = TelegramReporter(
-				telegram_token = my_telegram_bots.robobot.token, 
-				telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
-			),
-		)
+		the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}')
+		
+		with the_setup.hold_control_of_bias():
+			the_setup.set_bias_output_status('on')
+			the_setup.set_bias_voltage(111)
+		
+			scan_and_parse(
+				bureaucrat = Mariano,
+				the_setup = the_setup,
+				positions = positions,
+				n_triggers_per_position = N_TRIGGERS_PER_POSITION,
+				acquire_channels = [1,4],
+				silent = False,
+				reporter = TelegramReporter(
+					telegram_token = my_telegram_bots.robobot.token, 
+					telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+				),
+			)

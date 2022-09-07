@@ -372,7 +372,44 @@ class TemperatureMonitor(tk.Frame):
 	def update_display(self):
 		self.temperature_label.config(text=f'{self.the_setup.measure_temperature():.2f} °C')
 		self.humidity_label.config(text=f'{self.the_setup.measure_humidity():.2f} %RH')
-		self.peltier_IV_label.config(text=f'{self.the_setup.get_peltier_status()}, {self.the_setup.measure_peltier_voltage():.2f} V, {self.the_setup.measure_peltier_current():.2f} A')
+		self.peltier_IV_label.config(text=f'{self.the_setup.get_peltier_status()}, {self.the_setup.measure_peltier_voltage()*self.the_setup.measure_peltier_current():.2f} W')
+
+class BiasMonitor(tk.Frame):
+	def __init__(self, parent, the_setup, *args, **kwargs):
+		tk.Frame.__init__(self, parent, *args, **kwargs)
+		self.parent = parent
+		
+		self.the_setup = the_setup
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'Bias voltage: ').grid()
+		self.voltage_label = tk.Label(frame, text = '?')
+		self.voltage_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'Bias current: ').grid()
+		self.current_label = tk.Label(frame, text = '?')
+		self.current_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'Status: ').grid()
+		self.status_label = tk.Label(frame, text = '?')
+		self.status_label.grid()
+		
+		def thread_function():
+			while True:
+				time.sleep(1)
+				self.update_display()
+		
+		threading.Thread(target=thread_function, daemon=True).start()
+	
+	def update_display(self):
+		self.voltage_label.config(text=f'{self.the_setup.measure_bias_voltage():.2f} V')
+		self.current_label.config(text=f'{self.the_setup.measure_bias_current()*1e6:.2f} µA')
+		self.status_label.config(text=f'{self.the_setup.get_bias_output_status()}')
 
 if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
@@ -407,6 +444,14 @@ if __name__ == '__main__':
 	temperature_monitor.grid(
 		row = 0,
 		column = 2,
+		padx = (99,0),
+		sticky = 'n',
+	)
+	
+	bias_monitor = BiasMonitor(widgets_frame, the_setup)
+	bias_monitor.grid(
+		row = 0,
+		column = 3,
 		padx = (99,0),
 		sticky = 'n',
 	)

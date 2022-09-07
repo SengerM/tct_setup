@@ -169,7 +169,7 @@ def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:
 					include_plotlyjs = 'cdn',
 				)
 
-def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
+def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bool, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
 	"""Perform a `TCT_1D_scan` and parse in parallel."""
 	Ernestino = bureaucrat
 	TCT_still_scanning = True
@@ -202,9 +202,12 @@ def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_
 		)
 	finally:
 		TCT_still_scanning = False
+		while parsing_thread.is_alive():
+			sleep(1)
+		
+		if delete_waveforms_file == True:
+			(Ernestino.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite').unlink()
 	
-	while parsing_thread.is_alive():
-		sleep(1)
 	plot_parsed_data_from_TCT_1D_scan(bureaucrat=Ernestino)
 
 ########################################################################
@@ -248,6 +251,7 @@ if __name__ == '__main__':
 		
 			scan_and_parse(
 				bureaucrat = Mariano,
+				delete_waveforms_file = True,
 				the_setup = the_setup,
 				positions = positions,
 				n_triggers_per_position = N_TRIGGERS_PER_POSITION,

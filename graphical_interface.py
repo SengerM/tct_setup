@@ -2,6 +2,8 @@ import tkinter as tk
 import tkinter.messagebox
 import numpy as np
 import numbers
+import threading
+import time
 
 class CoordinatesFrame(tk.Frame):
 	def __init__(self, parent, coordinates_name=None, *args, **kwargs):
@@ -201,6 +203,153 @@ class StagesControlGraphicalInterface_main(tk.Frame):
 			memory.grid(pady=20)
 			memory.set_coordinates(*the_setup.get_stages_position())
 
+class graphical_ParticularsLaserStatusDisplay(tk.Frame):
+	def __init__(self, parent, the_setup, *args, **kwargs):
+		tk.Frame.__init__(self, parent, *args, **kwargs)
+		self.parent = parent
+		self._auto_update_interval = 1 # seconds
+		
+		self.the_setup = the_setup
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'Laser is').grid()
+		self.status_label = tk.Label(frame, text = '?')
+		self.status_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'DAC').grid()
+		self.DAC_label = tk.Label(frame, text = '?')
+		self.DAC_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=5)
+		tk.Label(frame, text = 'Frequency').grid()
+		self.frequency_label = tk.Label(frame, text = '?')
+		self.frequency_label.grid()
+		
+		self.automatic_display_update('on')
+		
+	def update_display(self):
+		self.status_label.config(text=f'{repr(self.the_setup.get_laser_status())}')
+		self.DAC_label.config(text=f'{self.the_setup.get_laser_DAC()}')
+		self.frequency_label.config(text=f'not implemented 😥')
+	
+	def automatic_display_update(self, status):
+		if not isinstance(status, str):
+			raise TypeError(f'<status> must be a string, received {status} of type {type(status)}.')
+		if status.lower() not in {'on','off'}:
+			raise ValueError(f'<status> must be either "on" or "off", received {status}.')
+		self._automatic_display_update_status = status
+		
+		def thread_function():
+			while self._automatic_display_update_status == 'on':
+				try:
+					self.update_display()
+				except:
+					pass
+				time.sleep(.6)
+		
+		self._automatic_display_update_thread = threading.Thread(target = thread_function)
+		self._automatic_display_update_thread.start()
+	
+	def terminate(self):
+		self.automatic_display_update('off')
+	
+class graphical_ParticularsLaserControlInput(tk.Frame):
+	def __init__(self, parent, the_setup, *args, **kwargs):
+		tk.Frame.__init__(self, parent, *args, **kwargs)
+		self.parent = parent
+		
+		self.the_setup = the_setup
+		
+		entries_frame = tk.Frame(self)
+		entries_frame.grid(
+			pady = 2
+		)
+		
+		inputs_frame = tk.Frame(entries_frame)
+		inputs_frame.grid()
+		
+		tk.Label(inputs_frame, text = f'DAC ').grid(
+			row = 0,
+			column = 0,
+			pady = 2,
+		)
+		self.DAC_entry = tk.Entry(inputs_frame, validate = 'key')
+		self.DAC_entry.grid(
+			row = 0,
+			column = 1,
+			pady = 2,
+		)
+		for key in {'<Return>','<KP_Enter>'}:
+			self.DAC_entry.bind(key, self.update_DAC)
+		
+		tk.Label(inputs_frame, text = f'Frequency ').grid(
+			row = 1,
+			column = 0,
+			pady = 2,
+		)
+		self.frequency_entry = tk.Entry(inputs_frame, validate = 'key')
+		self.frequency_entry.grid(
+			row = 1,
+			column = 1,
+			pady = 2,
+		)
+		for key in {'<Return>','<KP_Enter>'}:
+			self.frequency_entry.bind(key, self.update_frequency)
+		
+		self.status_button = tk.Button(entries_frame, text='Turn on' if self.the_setup.get_laser_status()=='off' else 'Turn off', command=self._status_button_clicked)
+		self.status_button.grid(
+			pady = 22,
+		)
+		
+	def _status_button_clicked(self):
+		if self.the_setup.get_laser_status() == 'on':
+			self.the_setup.set_laser_status('off')
+		elif self.the_setup.get_laser_status() == 'off':
+			self.the_setup.set_laser_status('on')
+		self.status_button.config(text='Turn on' if self.the_setup.get_laser_status()=='off' else 'Turn off')
+	
+	def update_DAC(self, event=None):
+		try:
+			DAC_to_set = int(self.DAC_entry.get())
+		except ValueError:
+			tk.messagebox.showerror(message = f'Check your input. DAC must be an integer number, received {repr(self.DAC_entry.get())}.')
+			return
+		try:
+			self.the_setup.set_laser_DAC(DAC_to_set)
+		except Exception as e:
+			tk.messagebox.showerror(message = f'Cannot update DAC. Reason: {repr(e)}.')
+	
+	def update_frequency(self, event=None):
+		try:
+			frequency_to_set = float(self.frequency_entry.get())
+		except ValueError:
+			tk.messagebox.showerror(message = f'Check your input. Frequency must be a float number, received {repr(self.frequency_entry.get())}.')
+			return
+		try:
+			raise NotImplementedError('Laser frequency is not implemented...')
+		except Exception as e:
+			tk.messagebox.showerror(message = f'Cannot update frequency. Reason: {repr(e)}.')
+
+class LaserControllerGraphicalInterface_main(tk.Frame):
+	def __init__(self, parent, the_setup, *args, **kwargs):
+		tk.Frame.__init__(self, parent, *args, **kwargs)
+		self.parent = parent
+		
+		main_frame = tk.Frame(self)
+		main_frame.grid(padx=5,pady=5)
+		display = graphical_ParticularsLaserStatusDisplay(main_frame, the_setup)
+		display.grid(pady=5)
+		graphical_ParticularsLaserControlInput(main_frame, the_setup).grid(pady=0)
+		
+		self._display = display
+	
+	def terminate(self):
+		self._display.terminate()
+
 if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
@@ -208,12 +357,27 @@ if __name__ == '__main__':
 	the_setup = connect_me_with_the_setup(who=f'graphical interface PID:{os.getpid()}')
 	
 	root = tk.Tk()
-	root.title('TCT stages control')
+	root.title('TCT setup control')
 	main_frame = tk.Frame(root)
 	main_frame.grid(padx=20,pady=20)
 	main_frame.grid()
-	tk.Label(main_frame, text = 'TCT stages control', font=("Georgia", 22, "bold")).grid(pady=22)
-	StagesControlGraphicalInterface_main(main_frame, the_setup).grid()
+	tk.Label(main_frame, text = 'TCT setup control', font=("Georgia", 22, "bold")).grid(pady=22)
+	widgets_frame = tk.Frame(main_frame)
+	widgets_frame.grid()
+	
+	stages_widget = StagesControlGraphicalInterface_main(widgets_frame, the_setup)
+	stages_widget.grid(
+		row = 0,
+		column = 0,
+		sticky = 'n',
+	)
+	laser_controller_widget = LaserControllerGraphicalInterface_main(widgets_frame, the_setup)
+	laser_controller_widget.grid(
+		row = 0,
+		column = 1,
+		padx = (99,0),
+		sticky = 'n',
+	)
 	
 	print(f'Waiting to acquire control of hardware...')
 	with the_setup.hold_tct_control():

@@ -202,13 +202,13 @@ class TheTCTSetup:
 		"""
 		with self._oscilloscope_Lock:
 			if hasattr(self, '_LeCroy'):
-				return self._LeCroy.get_waveform(channel=n_channel)
+				waveform_data = self._LeCroy.get_waveform(channel=n_channel)
 			elif hasattr(self, '_drs4_evaluation_board'):
 				waveform_data = self._drs4_evaluation_board.get_waveform(n_channel)
-				waveform_data['Amplitude (V)'] *= -1
-				return waveform_data
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
+		waveform_data['Amplitude (V)'] *= -1
+		return waveform_data
 	
 	def set_oscilloscope_vdiv(self, n_channel:int, vdiv:float)->None:
 		"""Sets the oscilloscope's vertical scale.

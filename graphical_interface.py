@@ -374,30 +374,86 @@ class TemperatureMonitor(tk.Frame):
 		self.humidity_label.config(text=f'{self.the_setup.measure_humidity():.2f} %RH')
 		self.peltier_IV_label.config(text=f'{self.the_setup.get_peltier_status()}, {self.the_setup.measure_peltier_voltage()*self.the_setup.measure_peltier_current():.2f} W')
 
-class BiasMonitor(tk.Frame):
+class BiasVoltageGraphicalControl(tk.Frame):
 	def __init__(self, parent, the_setup, *args, **kwargs):
 		tk.Frame.__init__(self, parent, *args, **kwargs)
 		self.parent = parent
-		
 		self.the_setup = the_setup
 		
 		frame = tk.Frame(self)
-		frame.grid(pady=5)
-		tk.Label(frame, text = 'Bias voltage: ').grid()
-		self.voltage_label = tk.Label(frame, text = '?')
-		self.voltage_label.grid()
+		frame.grid()
+		
+		tk.Label(frame, text = f'Voltage (V)').grid()
+		self.voltage_entry = tk.Entry(frame)
+		self.voltage_entry.grid(row=0,column=1)
+		
+		tk.Label(frame, text = f'Current limit (µA)').grid(row=1,column=0)
+		self.current_limit_entry = tk.Entry(frame)
+		self.current_limit_entry.grid(row=1,column=1)
+		
+		def set_voltage():
+			try:
+				voltage = float(self.voltage_entry.get())
+			except ValueError:
+				tk.messagebox.showerror(message = f'Check your input. Voltage must be a float number, received "{self.voltage_entry.get()}".')
+				return
+			print('Please wait while the voltage is being changed...')
+			self.the_setup.set_bias_voltage(volts=voltage)
+			print('Voltage has been changed!')
+		
+		def set_current_limit():
+			try:
+				current = float(self.current_limit_entry.get())
+			except ValueError:
+				tk.messagebox.showerror(message = f'Check your input. The current limit must be a float number, received {repr(self.current_limit_entry.get())}.')
+				return
+			print(f'Changing current limit to {current} µA...')
+			self.the_setup.set_current_compliance(amperes=current*1e-6)
+			print('Current limit has been changed!')
+		
+		def voltage_entry_enter_keybind_function(event=None):
+			def thread_function():
+				self.voltage_entry.config(state='disabled')
+				set_voltage()
+				self.voltage_entry.config(state='normal')
+			threading.Thread(target=thread_function).start()
+		
+		self.voltage_entry.bind('<Return>', voltage_entry_enter_keybind_function)
+		self.voltage_entry.bind('<KP_Enter>', voltage_entry_enter_keybind_function)
+		
+		def current_limit_entry_enter_keybind_function(event=None):
+			def thread_function():
+				self.current_limit_entry.config(state='disabled')
+				set_current_limit()
+				self.current_limit_entry.config(state='normal')
+			threading.Thread(target=thread_function).start()
+		
+		self.current_limit_entry.bind('<Return>', current_limit_entry_enter_keybind_function)
+		self.current_limit_entry.bind('<KP_Enter>', current_limit_entry_enter_keybind_function)
+
+class BiasVoltageGraphicalDisplay(tk.Frame):
+	def __init__(self, parent, the_setup, *args, **kwargs):
+		tk.Frame.__init__(self, parent, *args, **kwargs)
+		self.parent = parent
+		self.the_setup = the_setup
 		
 		frame = tk.Frame(self)
-		frame.grid(pady=5)
-		tk.Label(frame, text = 'Bias current: ').grid()
-		self.current_label = tk.Label(frame, text = '?')
-		self.current_label.grid()
+		frame.grid(pady=10)
+		tk.Label(frame, text = 'Measured voltage: ').grid()
+		self.measured_voltage_label = tk.Label(frame, text = '?')
+		self.measured_voltage_label.grid()
 		
 		frame = tk.Frame(self)
-		frame.grid(pady=5)
-		tk.Label(frame, text = 'Status: ').grid()
-		self.status_label = tk.Label(frame, text = '?')
-		self.status_label.grid()
+		frame.grid(pady=10)
+		tk.Label(frame, text = 'Current limit: ').grid()
+		self.current_compliance_label = tk.Label(frame, text = '?')
+		self.current_compliance_label.grid()
+		
+		frame = tk.Frame(self)
+		frame.grid(pady=10)
+		tk.Label(frame, text = 'Measured current: ').grid()
+		self.measured_current_label = tk.Label(frame, text = '?')
+		self.measured_current_label.grid()
 		
 		def thread_function():
 			while True:
@@ -405,15 +461,17 @@ class BiasMonitor(tk.Frame):
 				self.update_display()
 		
 		threading.Thread(target=thread_function, daemon=True).start()
-	
+		
 	def update_display(self):
-		self.voltage_label.config(text=f'{self.the_setup.measure_bias_voltage():.2f} V')
-		self.current_label.config(text=f'{self.the_setup.measure_bias_current()*1e6:.2f} µA')
-		self.status_label.config(text=f'{self.the_setup.get_bias_output_status()}')
-
+		self.measured_voltage_label.config(text=f'{self.the_setup.measure_bias_voltage():.2f} V')
+		self.current_compliance_label.config(text=f'{self.the_setup.get_current_compliance()*1e6:.3f} µA')
+		self.measured_current_label.config(text=f'{self.the_setup.measure_bias_current()*1e6:.3f} µA')
+	
 if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
+	
+	X_PADDING = 33
 	
 	the_setup = connect_me_with_the_setup(who=f'graphical interface PID:{os.getpid()}')
 	
@@ -436,7 +494,7 @@ if __name__ == '__main__':
 	laser_controller_widget.grid(
 		row = 0,
 		column = 1,
-		padx = (99,0),
+		padx = (X_PADDING,0),
 		sticky = 'n',
 	)
 	
@@ -444,15 +502,27 @@ if __name__ == '__main__':
 	temperature_monitor.grid(
 		row = 0,
 		column = 2,
-		padx = (99,0),
+		padx = (X_PADDING,0),
 		sticky = 'n',
 	)
 	
-	bias_monitor = BiasMonitor(widgets_frame, the_setup)
-	bias_monitor.grid(
+	bias_monitor_frame = tk.Frame(widgets_frame)
+	bias_monitor_frame.grid(
 		row = 0,
 		column = 3,
-		padx = (99,0),
+		padx = (X_PADDING,0),
+		sticky = 'n',
+	)
+	bias_monitor = BiasVoltageGraphicalDisplay(bias_monitor_frame, the_setup)
+	bias_monitor.grid(
+		row = 0,
+		column = 0,
+		sticky = 'n',
+	)
+	bias_control = BiasVoltageGraphicalControl(bias_monitor_frame, the_setup)
+	bias_control.grid(
+		row = 1,
+		column = 0,
 		sticky = 'n',
 	)
 	

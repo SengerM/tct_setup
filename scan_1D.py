@@ -127,6 +127,24 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 										n_waveform += 1
 
 def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:bool=True, draw_distributions:bool=False, strict_task_checking:bool=True):
+	"""Plot data parsed from a TCT 1D scan.
+	
+	Arguments
+	---------
+	bureaucrat: RunBureaucrat
+		The bureaucrat that will handle the measurement.
+	draw_main_plots: bool, default True
+		Specify whether or not to produce the "main plots", i.e. the most
+		relevant plots when inspecting the scan.
+	draw_distributions: bool, default False
+		Specify whether or not to produce distribution plots.
+	strict_task_checking: bool, default False
+		If `True` then an error will be raised if the required tasks were
+		not fully completed previously in the run handled by `bureaucrat`. 
+		If `False` this check is skipped and it will try to produce the
+		plots. Switching to `False` is useful for partially completed
+		scans, e.g. if there was an error in the middle.
+	"""
 	Néstor = bureaucrat
 	
 	if strict_task_checking:

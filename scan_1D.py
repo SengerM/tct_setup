@@ -11,6 +11,7 @@ from parse_waveforms import parse_waveforms
 import plotly.express as px
 from utils import integrate_distance_given_path, kMAD, interlace
 from grafica.plotly_utils.utils import line
+import numpy as np
 
 def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
 	"""Perform a 1D scan with the TCT setup.
@@ -125,10 +126,11 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 										
 										n_waveform += 1
 
-def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:bool=True, draw_distributions:bool=False):
+def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:bool=True, draw_distributions:bool=False, strict_task_checking:bool=True):
 	Néstor = bureaucrat
 	
-	Néstor.check_these_tasks_were_run_successfully(['TCT_1D_scan','parse_waveforms'])
+	if strict_task_checking:
+		Néstor.check_these_tasks_were_run_successfully(['TCT_1D_scan','parse_waveforms'])
 	
 	with Néstor.handle_task('plot_parsed_data_from_TCT_1D_scan') as Néstors_employee:
 		parsed_data_df = load_whole_dataframe(Néstor.path_to_directory_of_task('parse_waveforms')/'parsed_from_waveforms.sqlite')
@@ -290,7 +292,6 @@ SCAN_LENGTH = 333e-6 # meters
 SCAN_ANGLE_DEG = 90 # deg
 
 if __name__ == '__main__':
-	import numpy as np
 	import my_telegram_bots
 	from configuration_files.current_run import Alberto
 	from utils import create_a_timestamp

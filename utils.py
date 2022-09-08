@@ -26,3 +26,15 @@ def kMAD(x,nan_policy='omit'):
 	but is much more robust to outliers than the std."""
 	k_MAD_TO_STD = 1.4826 # https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
 	return k_MAD_TO_STD*median_abs_deviation(x,nan_policy=nan_policy)
+
+def interlace(lst):
+	# https://en.wikipedia.org/wiki/Interlacing_(bitmaps)
+	lst = sorted(lst)[::-1]
+	result = [lst[0], lst[-1]]
+	ranges = [(1, len(lst) - 1)]
+	for start, stop in ranges:
+		if start < stop:
+			middle = (start + stop) // 2
+			result.append(lst[middle])
+			ranges += (start, middle), (middle + 1, stop)
+	return result

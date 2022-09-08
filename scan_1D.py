@@ -9,7 +9,7 @@ from progressreporting.TelegramProgressReporter import TelegramReporter # https:
 import threading
 from parse_waveforms import parse_waveforms
 import plotly.express as px
-from utils import integrate_distance_given_path, kMAD
+from utils import integrate_distance_given_path, kMAD, interlace
 from grafica.plotly_utils.utils import line
 
 def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
@@ -35,6 +35,8 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		A reporter to report the progress of the script. Optional.
 	"""
 	Raúl = bureaucrat
+	
+	Raúl.create_run()
 	
 	with Raúl.handle_task('TCT_1D_scan') as Raúls_employee:
 		if not silent:
@@ -149,6 +151,11 @@ def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:
 					error_y_mode = 'bands',
 					color = 'n_channel',
 					line_dash = 'n_pulse',
+					title = f'{var} vs distance<br><sup>Run: {Néstor.run_name}</sup>',
+					labels = {
+						'Distance (m) nanmedian': 'Distance (m)',
+						f'{var} nanmedian': var,
+					},
 				)
 				fig.write_html(
 					str(Néstors_employee.path_to_directory_of_my_task/f'{var} vs distance.html'),
@@ -175,17 +182,19 @@ def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bo
 	TCT_still_scanning = True
 	
 	def parsing_thread_function():
+		args = dict(
+			bureaucrat = Ernestino, 
+			name_of_task_that_produced_the_waveforms_to_parse = 'TCT_1D_scan',
+			silent = True, 
+			continue_from_where_we_left_last_time = True,
+		)
 		while TCT_still_scanning:
 			try:
-				parse_waveforms(
-					bureaucrat = Ernestino, 
-					name_of_task_that_produced_the_waveforms_to_parse = 'TCT_1D_scan',
-					silent = True, 
-					continue_from_where_we_left_last_time = True,
-				)
+				parse_waveforms(**args)
 			except:
 				pass
 			sleep(1)
+		parse_waveforms(**args) # This last call is in case there is a bunch of waveforms left.
 	
 	parsing_thread = threading.Thread(target=parsing_thread_function)
 	
@@ -210,20 +219,75 @@ def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bo
 	
 	plot_parsed_data_from_TCT_1D_scan(bureaucrat=Ernestino)
 
+def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bool, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
+	"""Perform a several 1D scans with the TCT setup, one at each voltage.
+	
+	Arguments
+	----------
+	bureaucrat: RunBureaucrat
+		The bureaucrat that will handle the measurement.
+	the_setup:
+		An object to control the hardware.
+	voltages: list of float
+		Voltages at which to measure.
+	positions: list of tuples
+		A list of tuples specifying the positions to measure. Each position
+		is a tuple of float of the form `(x,y,z)`.
+	acquire_channels: list of int
+		A list with the number of the channels to acquire from the oscilloscope.
+	n_triggers_per_position: int
+		Number of triggers to record at each position.
+	silent: bool, default True
+		If `True`, not messages will be printed. If `False`, messages will
+		be printed showing the progress of the measurement.
+	reporter: TelegramReporter
+		A reporter to report the progress of the script. Optional.
+	"""
+	Lorenzo = bureaucrat
+	Lorenzo.create_run()
+	
+	with Lorenzo.handle_task('TCT_1D_scan_sweeping_bias_voltage') as Lorenzos_employee:
+		if not silent:
+			print(f'Waiting for acquiring the control of the hardware...')
+		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
+			if not silent:
+				print(f'Control of hardware acquired!')
+			report_progress = reporter is not None
+			with reporter.report_for_loop(len(voltages), f'{Lorenzo.run_name}') if report_progress else nullcontext() as reporter:
+				for voltage in voltages:
+					if not silent:
+						print('Setting bias voltage...')
+					the_setup.set_bias_voltage(volts=voltage)
+					Lorenzos_son = Lorenzos_employee.create_subrun(subrun_name=f'{Lorenzo.run_name}_{int(voltage)}V')
+					scan_and_parse(
+						bureaucrat = Lorenzos_son,
+						delete_waveforms_file = delete_waveforms_file,
+						the_setup = the_setup,
+						positions = positions,
+						n_triggers_per_position = n_triggers_per_position,
+						acquire_channels = acquire_channels,
+						silent = silent,
+						reporter = TelegramReporter(
+							telegram_token = my_telegram_bots.robobot.token, 
+							telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+						) if report_progress else None,
+					)
+					if not silent:
+						print(f'Finished {Lorenzos_son.run_name}.')
+					reporter.update(1)
+
 ########################################################################
 
 # The following things are defined here such that they can be imported from other scripts.
 
 DEVICE_CENTER = {
-	'x': -2.96578125e-3,
-	'y': 1.430810546875e-3,
-	'z': 67.3390039e-3,
+	'x': -2.92578125e-3,
+	'y': 1.48021484375e-3,
+	'z': 71.338994140625e-3,
 }
-SCAN_STEP = 10e-6 # meters
+SCAN_STEP = 1e-6 # meters
 SCAN_LENGTH = 333e-6 # meters
 SCAN_ANGLE_DEG = 90 # deg
-LASER_DAC = 0
-N_TRIGGERS_PER_POSITION = 5
 
 if __name__ == '__main__':
 	import numpy as np
@@ -245,16 +309,18 @@ if __name__ == '__main__':
 		
 		the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}')
 		
-		with the_setup.hold_control_of_bias():
+		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
+			the_setup.set_current_compliance(amperes=10e-6)
 			the_setup.set_bias_output_status('on')
-			the_setup.set_bias_voltage(111)
+			the_setup.set_laser_DAC(600)
 		
-			scan_and_parse(
+			TCT_1D_scan_sweeping_bias_voltage(
 				bureaucrat = Mariano,
 				delete_waveforms_file = True,
+				voltages = interlace(np.linspace(100,220,33)),
 				the_setup = the_setup,
 				positions = positions,
-				n_triggers_per_position = N_TRIGGERS_PER_POSITION,
+				n_triggers_per_position = 111,
 				acquire_channels = [1,4],
 				silent = False,
 				reporter = TelegramReporter(
@@ -262,3 +328,5 @@ if __name__ == '__main__':
 					telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 				),
 			)
+			
+			the_setup.set_bias_output_status('off')

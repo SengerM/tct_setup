@@ -391,6 +391,18 @@ class BiasVoltageGraphicalControl(tk.Frame):
 		self.current_limit_entry = tk.Entry(frame)
 		self.current_limit_entry.grid(row=1,column=1)
 		
+		self.status_button = tk.Button(frame, text='Turn on' if self.the_setup.get_bias_output_status()=='off' else 'Turn off', command=self._status_button_clicked)
+		self.status_button.grid(
+			pady = 22,
+		)
+		
+	def _status_button_clicked(self):
+		if self.the_setup.get_bias_output_status() == 'on':
+			self.the_setup.set_bias_output_status('off')
+		elif self.the_setup.get_bias_output_status() == 'off':
+			self.the_setup.set_bias_output_status('on')
+		self.status_button.config(text='Turn on' if self.the_setup.get_bias_output_status()=='off' else 'Turn off')
+		
 		def set_voltage():
 			try:
 				voltage = float(self.voltage_entry.get())
@@ -455,6 +467,12 @@ class BiasVoltageGraphicalDisplay(tk.Frame):
 		self.measured_current_label = tk.Label(frame, text = '?')
 		self.measured_current_label.grid()
 		
+		frame = tk.Frame(self)
+		frame.grid(pady=10)
+		tk.Label(frame, text = 'Bias voltage is: ').grid()
+		self.status_label = tk.Label(frame, text = '?')
+		self.status_label.grid()
+		
 		def thread_function():
 			while True:
 				time.sleep(1)
@@ -465,7 +483,8 @@ class BiasVoltageGraphicalDisplay(tk.Frame):
 	def update_display(self):
 		self.measured_voltage_label.config(text=f'{self.the_setup.measure_bias_voltage():.2f} V')
 		self.current_compliance_label.config(text=f'{self.the_setup.get_current_compliance()*1e6:.3f} µA')
-		self.measured_current_label.config(text=f'{self.the_setup.measure_bias_current()*1e6:.3f} µA')
+		self.measured_current_label.config(text=f'{self.the_setup.measure_bias_current()*1e6:.6f} µA')
+		self.status_label.config(text=f'{self.the_setup.get_bias_output_status()}')
 	
 if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup

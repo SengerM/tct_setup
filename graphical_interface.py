@@ -242,7 +242,7 @@ class graphical_ParticularsLaserStatusDisplay(tk.Frame):
 	def update_display(self):
 		self.status_label.config(text=f'{repr(self.the_setup.get_laser_status())}')
 		self.DAC_label.config(text=f'{self.the_setup.get_laser_DAC()}')
-		self.frequency_label.config(text=f'not implemented 😥')
+		self.frequency_label.config(text=f'{self.the_setup.get_laser_frequency():.0f} Hz')
 	
 class graphical_ParticularsLaserControlInput(tk.Frame):
 	def __init__(self, parent, the_setup, *args, **kwargs):
@@ -317,7 +317,7 @@ class graphical_ParticularsLaserControlInput(tk.Frame):
 			tk.messagebox.showerror(message = f'Check your input. Frequency must be a float number, received {repr(self.frequency_entry.get())}.')
 			return
 		try:
-			raise NotImplementedError('Laser frequency is not implemented...')
+			self.the_setup.set_laser_frequency(frequency_to_set)
 		except Exception as e:
 			tk.messagebox.showerror(message = f'Cannot update frequency. Reason: {repr(e)}.')
 

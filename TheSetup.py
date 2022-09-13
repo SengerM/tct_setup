@@ -95,6 +95,22 @@ class TheTCTSetup:
 		with self._tct_Lock:
 			self._tct.laser.DAC = DAC
 	
+	def get_laser_frequency(self)->float:
+		"""Returns the laser frequency value."""
+		with self._tct_Lock:
+			return self._tct.laser.frequency
+	
+	def set_laser_frequency(self, HZ:float)->None:
+		"""Set the value of the frequency for the laser.
+		
+		Arguments
+		---------
+		HZ: float
+			The frequency in Hertz.
+		"""
+		with self._tct_Lock:
+			self._tct.laser.frequency = HZ
+	
 	# Bias voltage power supply ----------------------------------------
 	
 	def measure_bias_voltage(self)->float:
@@ -451,6 +467,23 @@ class TheTCTSetupWithNamedLocks(TheTCTSetup):
 		"""
 		with self._tct_holding_Lock(who):
 			super().set_laser_DAC(DAC=DAC)
+	
+	def set_laser_frequency(self, HZ:float, who:str)->None:
+		"""Set the value of the frequency for the laser.
+		
+		Arguments
+		---------
+		HZ: float
+			The frequency in Hertz.
+		who: str
+			A string identifying you. This can be whatever you want, but
+			you have to use always the same. A good choice is `str(os.getpid())`
+			because it will give all your imported modules the same name.
+			This is a workaround because, surprisingly,  the Locks in python
+			are not multiprocess friendly.
+		"""
+		with self._tct_holding_Lock(who):
+			super().set_laser_frequency(HZ=HZ)
 
 	def set_bias_voltage(self, volts:float, who:str):
 		"""Set the bias voltage.

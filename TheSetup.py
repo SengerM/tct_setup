@@ -190,7 +190,32 @@ class TheTCTSetup:
 				self._drs4_evaluation_board.set_trigger_delay(seconds=130e-9-40e-9) # Totally empiric number.
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
-			
+	
+	def configure_oscilloscope_sequence_acquisition(self, n_sequences_per_trigger:int)->None:
+		"""Configure the oscilloscope to automatically acquire multiple
+		triggers on each trigger.
+		
+		Arguments
+		---------
+		n_sequences_per_trigger: int
+			Number of "triggers per trigger". If this is 1, the usual behavior
+			of the oscilloscope is configured. If this is 2, 3 or more then
+			the oscilloscope is configured into "sampling mode sequence"
+			so each time it triggers it will actually trigger multiple
+			times and use the internal memory of the oscilloscope to
+			store the waveforms, thus making it much faster than triggering
+			multiple times and retrieving the data from the computer.
+		"""
+		if not isinstance(n_sequences_per_trigger, int):
+			raise TypeError(f'`n_sequences_per_trigger` must be an integer.')
+		if n_sequences_per_trigger<=0:
+			raise ValueError(f'`n_sequences_per_trigger` must be > 0.')
+		with self._oscilloscope_Lock:
+			if n_sequences_per_trigger == 1:
+				self._LeCroy.sampling_mode_sequence('off')
+			else:
+				self._LeCroy.sampling_mode_sequence('on', number_of_segments=n_sequences_per_trigger)
+	
 	def wait_for_trigger(self)->None:
 		"""Blocks execution until there is a trigger in the acquisition
 		system. Then it is stopped."""
@@ -202,7 +227,7 @@ class TheTCTSetup:
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
 	
-	def get_waveform(self, n_channel:int)->dict:
+	def get_waveform(self, n_channel:int)->list:
 		"""Gets the waveform from the acquisition system for the specified 
 		channel.
 		
@@ -213,8 +238,19 @@ class TheTCTSetup:
 		
 		Returns
 		-------
-		waveform: dict
-			A dictionary of the form `{'Time (s)': np.array, 'Amplitude (V)': np.array}`.
+		waveform: list of dict
+			A list of dict, each element of the dictionary being one 
+			waveform, of the form:
+			```
+			[
+				{'Time (s)': numpy.array, 'Amplitude (V)': numpy.array}, # This is waveform 0
+				{'Time (s)': numpy.array, 'Amplitude (V)': numpy.array}, # Waveform 1
+				...
+			]
+			```
+			Each of these waveforms corresponds to each of the "sampling
+			mode sequence". If "sampling mode RealTime" is used, then this
+			will be a list with only one element.
 		"""
 		with self._oscilloscope_Lock:
 			if hasattr(self, '_LeCroy'):
@@ -223,7 +259,10 @@ class TheTCTSetup:
 				waveform_data = self._drs4_evaluation_board.get_waveform(n_channel)
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
-		waveform_data['Amplitude (V)'] *= -1
+		if isinstance(waveform_data, dict):
+			waveform_data = [waveform_data]
+		for i in range(len(waveform_data)):
+			waveform_data[i]['Amplitude (V)'] *= -1
 		return waveform_data
 	
 	def set_oscilloscope_vdiv(self, n_channel:int, vdiv:float)->None:
@@ -552,6 +591,10 @@ class TheTCTSetupWithNamedLocks(TheTCTSetup):
 		"""
 		with self._signal_acquisition_holding_Lock(who):
 			super().configure_oscilloscope_for_two_pulses()
+	
+	def configure_oscilloscope_sequence_acquisition(self, n_sequences_per_trigger:int, who:str)->None:
+		with self._signal_acquisition_holding_Lock(who):
+			super().configure_oscilloscope_sequence_acquisition(n_sequences_per_trigger=n_sequences_per_trigger)
 
 	def set_oscilloscope_vdiv(self, n_channel:int, vdiv:float, who:str)->None:
 		"""Sets the oscilloscope's vertical scale.

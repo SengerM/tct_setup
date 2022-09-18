@@ -1,7 +1,7 @@
 from the_bureaucrat.bureaucrats import RunBureaucrat # https://github.com/SengerM/the_bureaucrat
 from pathlib import Path
 import pandas
-from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper, load_whole_dataframe # https://github.com/SengerM/huge_dataframe
+from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper, load_whole_dataframe, load_only_index_without_repeated_entries # https://github.com/SengerM/huge_dataframe
 import sqlite3
 from signals.PeakSignal import PeakSignal, draw_in_plotly # https://github.com/SengerM/signals
 
@@ -45,16 +45,14 @@ def parse_waveforms(bureaucrat:RunBureaucrat, name_of_task_that_produced_the_wav
 		
 		if not silent:
 			print(f'Determining the total number of waveforms to be processed...')
-		sqlite_connection_cursor = sqlite_connection.cursor()
-		sqlite_connection_cursor.execute('SELECT max(n_waveform) from dataframe_table')
-		number_of_waveforms_to_process = sqlite_connection_cursor.fetchone()[0]+1
+		number_of_waveforms_to_process = load_only_index_without_repeated_entries(path_to_waveforms_file)['n_waveform'].max()
 		index_of_all_waveforms = set(range(number_of_waveforms_to_process))
 		index_of_waveforms_to_be_parsed = index_of_all_waveforms - index_of_waveforms_already_parsed_in_the_past
 		
 		if not silent:
 			print(f'{len(index_of_waveforms_to_be_parsed)} waveforms still need to be parsed. The others were already parsed beforehand. Will now proceed...')
 		
-		with SQLiteDataFrameDumper(Quiques_employee.path_to_directory_of_my_task/Path('parsed_from_waveforms.sqlite'), dump_after_n_appends = 100, dump_after_seconds = 60, delete_database_if_already_exists=False) as parsed_data_dumper: 
+		with SQLiteDataFrameDumper(Quiques_employee.path_to_directory_of_my_task/Path('parsed_from_waveforms.sqlite'), dump_after_n_appends = 1111, dump_after_seconds = 60, delete_database_if_already_exists=False) as parsed_data_dumper: 
 			for i,n_waveform in enumerate(sorted(index_of_waveforms_to_be_parsed)):
 				if not silent:
 					print(f'Parsing n_waveform={n_waveform} ({i}/{len(index_of_waveforms_to_be_parsed)-1})')

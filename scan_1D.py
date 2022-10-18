@@ -50,74 +50,70 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 			the_setup.set_laser_status(status='on') # Make sure the laser is on...
 			
 			report_progress = reporter is not None
-			with reporter.report_for_loop(len(positions), f'{Raúl.run_name}') if report_progress else nullcontext() as reporter:
-				with SQLiteDataFrameDumper(
-					Raúls_employee.path_to_directory_of_my_task/Path('waveforms.sqlite'), 
-					dump_after_n_appends = 1111, # Use this to limit the amount of RAM memory consumed.
-					dump_after_seconds = 60, # Use this to ensure the data is stored after some time.
-				) as waveforms_dumper:
-					with SQLiteDataFrameDumper(
-						Raúls_employee.path_to_directory_of_my_task/Path('measured_data.sqlite'), 
-						dump_after_n_appends = 1111, # Use this to limit the amount of RAM memory consumed.
-						dump_after_seconds = 60, # Use this to ensure the data is stored after some time.
-					) as extra_data_dumper: # The `with` statement ensures all the data that was ever appended will be stored in disk.
-						n_waveform = 0
-						for n_position, target_position in enumerate(positions):
-							the_setup.move_to(**{xyz: n for xyz,n in zip(['x','y','z'],target_position)})
-							sleep(0.5) # Wait for any transient after moving the motors.
-							position = the_setup.get_stages_position()
-							if not silent:
-								print(f'Measuring: n_position={n_position}/{len(positions)-1}...')
-							the_setup.wait_for_trigger()
-							extra_data = {
-								'x (m)': position[0],
-								'y (m)': position[1],
-								'z (m)': position[2],
-								'When': datetime.datetime.now(),
-								'Bias voltage (V)': the_setup.measure_bias_voltage(),
-								'Bias current (A)': the_setup.measure_bias_current(),
-								'Laser DAC': the_setup.get_laser_DAC(),
-								'Temperature (°C)': the_setup.measure_temperature(),
-								'Humidity (%RH)': the_setup.measure_humidity(),
-								'n_position': n_position,
-							}
-							for n_channel in acquire_channels:
-								data_from_oscilloscope = the_setup.get_waveform(n_channel=n_channel)
-								for n_trigger,raw_data in enumerate(data_from_oscilloscope):
-									raw_data_each_pulse = {}
-									for n_pulse in [1,2]:
-										raw_data_each_pulse[n_pulse] = {}
-										for variable in ['Time (s)','Amplitude (V)']:
-											if n_pulse == 1:
-												raw_data_each_pulse[n_pulse][variable] = raw_data[variable][:int(len(raw_data[variable])/2)]
-											if n_pulse == 2:
-												raw_data_each_pulse[n_pulse][variable] = raw_data[variable][int(len(raw_data[variable])/2):]
-										
-										waveform_df = pandas.DataFrame(
-											{
-												'Time (s)': raw_data_each_pulse[n_pulse]['Time (s)'],
-												'Amplitude (V)': raw_data_each_pulse[n_pulse]['Amplitude (V)'],
-												'n_waveform': n_waveform
-											}
-										)
-										waveform_df.set_index('n_waveform', inplace=True)
-										
-										extra_data['n_waveform'] = n_waveform
-										extra_data['n_trigger'] = n_trigger
-										extra_data['n_pulse'] = n_pulse
-										extra_data['n_channel'] = n_channel
-										extra_data_df = pandas.DataFrame(extra_data, index=[0])
-										extra_data_df.set_index(
-											['n_waveform','n_position','n_trigger','n_channel','n_pulse'],
-											inplace=True
-										)
-										
-										waveforms_dumper.append(waveform_df)
-										extra_data_dumper.append(extra_data_df)
-										
-										n_waveform += 1
-							if report_progress:
-								reporter.update(1)
+			with \
+				reporter.report_for_loop(len(positions), f'{Raúl.run_name}') if report_progress else nullcontext() as reporter, \
+				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('waveforms.sqlite'), dump_after_n_appends = 1111, dump_after_seconds = 60) as waveforms_dumper, \
+				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('measured_data.sqlite'), dump_after_n_appends = 1111, dump_after_seconds = 60) as extra_data_dumper \
+			:
+				n_waveform = 0
+				for n_position, target_position in enumerate(positions):
+					the_setup.move_to(**{xyz: n for xyz,n in zip(['x','y','z'],target_position)})
+					sleep(0.5) # Wait for any transient after moving the motors.
+					position = the_setup.get_stages_position()
+					if not silent:
+						print(f'Measuring: n_position={n_position}/{len(positions)-1}...')
+					the_setup.wait_for_trigger()
+					extra_data = {
+						'x (m)': position[0],
+						'y (m)': position[1],
+						'z (m)': position[2],
+						'When': datetime.datetime.now(),
+						'Bias voltage (V)': the_setup.measure_bias_voltage(),
+						'Bias current (A)': the_setup.measure_bias_current(),
+						'Laser DAC': the_setup.get_laser_DAC(),
+						'Temperature (°C)': the_setup.measure_temperature(),
+						'Humidity (%RH)': the_setup.measure_humidity(),
+						'n_position': n_position,
+					}
+					for n_channel in acquire_channels:
+						data_from_oscilloscope = the_setup.get_waveform(n_channel=n_channel)
+						if not isinstance(data_from_oscilloscope, list):
+							raise RuntimeError(f'I was expecting a list, but received an object of type {type(data_from_oscilloscope)}. If thi is a dictionary, probably the reason is that you have to set "Sampling mode → sequence" in the oscilloscope.')
+						for n_trigger,raw_data in enumerate(data_from_oscilloscope):
+							raw_data_each_pulse = {}
+							for n_pulse in [1,2]:
+								raw_data_each_pulse[n_pulse] = {}
+								for variable in ['Time (s)','Amplitude (V)']:
+									if n_pulse == 1:
+										raw_data_each_pulse[n_pulse][variable] = raw_data[variable][:int(len(raw_data[variable])/2)]
+									if n_pulse == 2:
+										raw_data_each_pulse[n_pulse][variable] = raw_data[variable][int(len(raw_data[variable])/2):]
+								
+								waveform_df = pandas.DataFrame(
+									{
+										'Time (s)': raw_data_each_pulse[n_pulse]['Time (s)'],
+										'Amplitude (V)': raw_data_each_pulse[n_pulse]['Amplitude (V)'],
+										'n_waveform': n_waveform
+									}
+								)
+								waveform_df.set_index('n_waveform', inplace=True)
+								
+								extra_data['n_waveform'] = n_waveform
+								extra_data['n_trigger'] = n_trigger
+								extra_data['n_pulse'] = n_pulse
+								extra_data['n_channel'] = n_channel
+								extra_data_df = pandas.DataFrame(extra_data, index=[0])
+								extra_data_df.set_index(
+									['n_waveform','n_position','n_trigger','n_channel','n_pulse'],
+									inplace=True
+								)
+								
+								waveforms_dumper.append(waveform_df)
+								extra_data_dumper.append(extra_data_df)
+								
+								n_waveform += 1
+					if report_progress:
+						reporter.update(1)
 
 def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:bool=True, draw_distributions:bool=False, strict_task_checking:bool=True):
 	"""Plot data parsed from a TCT 1D scan.
@@ -206,7 +202,7 @@ def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bo
 				parse_waveforms(**args)
 			except:
 				pass
-			sleep(1)
+			sleep(11)
 		parse_waveforms(**args) # This last call is in case there is a bunch of waveforms left.
 	
 	parsing_thread = threading.Thread(target=parsing_thread_function)
@@ -230,6 +226,8 @@ def scan_and_parse(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bo
 		if delete_waveforms_file == True:
 			(Ernestino.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite').unlink()
 	
+	if not silent:
+		print(f'Doing some plots...')
 	plot_parsed_data_from_TCT_1D_scan(bureaucrat=Ernestino)
 
 def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, delete_waveforms_file:bool, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
@@ -298,7 +296,7 @@ DEVICE_CENTER = {
 	'y': 1565.5078125e-6,
 	'z': 71538.876953125e-6,
 }
-SCAN_STEP = 1e-6 # meters
+SCAN_STEP = 10e-6 # meters
 SCAN_LENGTH = 333e-6 # meters
 SCAN_ANGLE_DEG = 90 # deg
 
@@ -325,8 +323,9 @@ if __name__ == '__main__':
 			the_setup.set_current_compliance(amperes=10e-6)
 			the_setup.set_bias_output_status('on')
 			the_setup.set_bias_voltage(200)
-			the_setup.set_laser_DAC(650)
+			the_setup.set_laser_DAC(660)
 			the_setup.set_laser_frequency(1000)
+			the_setup.set_laser_status('on')
 			
 			scan_and_parse(
 				bureaucrat = Mariano,
@@ -334,7 +333,7 @@ if __name__ == '__main__':
 				# ~ voltages = interlace(np.linspace(100,220,33)),
 				the_setup = the_setup,
 				positions = positions,
-				n_triggers_per_position = 555,
+				n_triggers_per_position = 111,
 				acquire_channels = [1,4],
 				silent = False,
 				reporter = TelegramReporter(

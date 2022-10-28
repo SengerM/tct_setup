@@ -30,6 +30,8 @@ def kMAD(x,nan_policy='omit'):
 def interlace(lst):
 	# https://en.wikipedia.org/wiki/Interlacing_(bitmaps)
 	lst = sorted(lst)[::-1]
+	if len(lst) == 1:
+		return lst
 	result = [lst[0], lst[-1]]
 	ranges = [(1, len(lst) - 1)]
 	for start, stop in ranges:

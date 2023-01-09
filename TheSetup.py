@@ -254,7 +254,7 @@ class TheTCTSetup:
 		"""
 		with self._oscilloscope_Lock:
 			if hasattr(self, '_LeCroy'):
-				waveform_data = self._LeCroy.get_waveform(channel=n_channel)
+				waveform_data = self._LeCroy.get_waveform(n_channel=n_channel)['waveforms']
 			elif hasattr(self, '_drs4_evaluation_board'):
 				waveform_data = self._drs4_evaluation_board.get_waveform(n_channel)
 			else:

@@ -1,6 +1,13 @@
 import datetime
 import time
 from scipy.stats import median_abs_deviation
+import sqlite3
+import pandas
+from pathlib import Path
+from huge_dataframe.SQLiteDataFrame import load_only_index_without_repeated_entries, SQLiteDataFrameDumper # https://github.com/SengerM/huge_dataframe
+from signals.PeakSignal import PeakSignal, compress_PeakSignal_V230507, decompress_PeakSignal_V230507 # https://github.com/SengerM/signals
+import pickle
+import zipfile
 
 def create_a_timestamp():
 	time.sleep(1) # This is to ensure that no two timestamps are the same.
@@ -40,3 +47,65 @@ def interlace(lst):
 			result.append(lst[middle])
 			ranges += (start, middle), (middle + 1, stop)
 	return result
+
+def compress_waveforms_sqlite(path_to_file:Path):
+	"""Compress a `waveforms.sqlite` file which contains signals from
+	LGADs, PMTs, etc. The compression is almost lossless and compression 
+	rates range between 10 and 40 times smaller after compression."""
+	waveforms_connection = sqlite3.connect(path_to_file)
+	waveforms_index = load_only_index_without_repeated_entries(Path(path_to_file))
+	
+	path_to_temporary_pickle_file = path_to_file.parent/'compressed_waveforms.pickle'
+	with zipfile.ZipFile(path_to_file.with_suffix('.zip'), 'w', zipfile.ZIP_DEFLATED) as myzip:
+		with open(path_to_temporary_pickle_file, 'a+b') as pickle_file:
+			for idx, row in waveforms_index.iterrows():
+				waveform = pandas.read_sql(
+					sql = f"SELECT * from dataframe_table WHERE " + " AND ".join([f"{name} is {val}" for name,val in zip(waveforms_index.columns, row)]),
+					con = waveforms_connection,
+				)
+				signal = PeakSignal(
+					time = waveform['Time (s)'],
+					samples = waveform['Amplitude (V)'],
+				)
+				compressed_waveform = compress_PeakSignal_V230507(signal)
+				pickle.dump(
+					obj = compressed_waveform, 
+					file = pickle_file
+				)
+		
+		myzip.write(path_to_temporary_pickle_file)
+		myzip.write(Path(__file__).resolve(), Path(__file__).parts[-1])
+	path_to_temporary_pickle_file.unlink()
+
+def decompress_waveforms_into_sqlite(path_to_file:Path):
+	"""Decompress a file that was compressed with `compress_waveforms_sqlite`."""
+	path_to_temporary_pickle_file = path_to_file.with_suffix('.pickle')
+	with zipfile.ZipFile(path_to_file, 'r') as zip_file:
+		with open(path_to_temporary_pickle_file, 'wb') as pickle_file:
+			pickle_file.write(zip_file.read('compressed_waveforms.pickle'))
+	
+	with SQLiteDataFrameDumper(path_to_file.with_suffix('.sqlite'), dump_after_n_appends=1111) as sqlite_dumper:
+		with open(path_to_temporary_pickle_file, 'rb') as pickle_file:
+			n_waveform = 0
+			while True:
+				try:
+					compressed_waveform = pickle.load(pickle_file)
+					decompressed_signal = decompress_PeakSignal_V230507(compressed_waveform)
+					
+					waveform_df = pandas.DataFrame(
+						{
+							'Time (s)': decompressed_signal.time,
+							'Amplitude (V)': decompressed_signal.samples,
+						}
+					)
+					waveform_df['n_waveform'] = n_waveform
+					waveform_df.set_index('n_waveform', inplace=True)
+					sqlite_dumper.append(waveform_df)
+					n_waveform += 1
+				except EOFError:
+					break
+	path_to_temporary_pickle_file.unlink()
+
+def save_dataframe(df, name:str, location:Path):
+	for extension,method in {'pickle':df.to_pickle,'csv':df.to_csv}.items():
+		method(location/f'{name}.{extension}')

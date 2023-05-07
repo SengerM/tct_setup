@@ -5,16 +5,16 @@ import pandas
 import datetime
 from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper, load_whole_dataframe # https://github.com/SengerM/huge_dataframe
 from contextlib import nullcontext
-from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting
+from progressreporting.TelegramProgressReporter import SafeTelegramReporter4Loops # https://github.com/SengerM/progressreporting
 import threading
 from parse_waveforms import parse_waveform
 import plotly.express as px
-from utils import integrate_distance_given_path, kMAD, interlace
+from utils import integrate_distance_given_path, kMAD, interlace, compress_waveforms_sqlite
 from grafica.plotly_utils.utils import line
 import numpy as np
 from signals.PeakSignal import PeakSignal, draw_in_plotly # https://github.com/SengerM/signals
 
-def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
+def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
 	"""Perform a 1D scan with the TCT setup.
 	
 	Arguments
@@ -33,12 +33,12 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 	silent: bool, default True
 		If `True`, not messages will be printed. If `False`, messages will
 		be printed showing the progress of the measurement.
-	reporter: TelegramReporter
+	reporter: SafeTelegramReporter4Loops
 		A reporter to report the progress of the script. Optional.
 	"""
 	Raúl = bureaucrat
 	
-	Raúl.create_run()
+	Raúl.create_run(if_exists='skip')
 	
 	with Raúl.handle_task('TCT_1D_scan') as Raúls_employee:
 		if not silent:
@@ -49,12 +49,12 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 			the_setup.configure_oscilloscope_for_two_pulses()
 			the_setup.configure_oscilloscope_sequence_acquisition(n_sequences_per_trigger = int(n_triggers_per_position))
 			the_setup.set_laser_status(status='on') # Make sure the laser is on...
-			
-			report_progress = reporter is not None
+			path_to_waveforms_file = Raúls_employee.path_to_directory_of_my_task/'waveforms.sqlite'
 			with \
-				reporter.report_for_loop(len(positions), f'{Raúl.run_name}') if report_progress else nullcontext() as reporter, \
+				reporter.report_loop(len(positions), Raúl.run_name) if reporter is not None else nullcontext() as reporter, \
 				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('parsed_from_waveforms.sqlite'), dump_after_n_appends = 7777, dump_after_seconds = 60) as parsed_data_dumper, \
-				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('measured_data.sqlite'), dump_after_n_appends = 1111, dump_after_seconds = 60) as extra_data_dumper \
+				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('measured_data.sqlite'), dump_after_n_appends = 1111, dump_after_seconds = 60) as measured_data_dumper, \
+				SQLiteDataFrameDumper(path_to_waveforms_file, dump_after_n_appends = 1111, dump_after_seconds = 60) as waveforms_dumper \
 			:
 				n_waveform = 0
 				for n_position, target_position in enumerate(positions):
@@ -81,7 +81,7 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 					}
 					extra_data = pandas.DataFrame(extra_data, index=[0])
 					extra_data.set_index('n_position', inplace=True)
-					extra_data_dumper.append(extra_data)
+					measured_data_dumper.append(extra_data)
 					
 					for n_channel in acquire_channels:
 						data_from_oscilloscope = the_setup.get_waveform(n_channel=n_channel)
@@ -94,6 +94,11 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 										raw_data_each_pulse[n_pulse][variable] = raw_data[variable][:int(len(raw_data[variable])/2)]
 									if n_pulse == 2:
 										raw_data_each_pulse[n_pulse][variable] = raw_data[variable][int(len(raw_data[variable])/2):]
+								
+								waveform = pandas.DataFrame(raw_data_each_pulse[n_pulse])
+								waveform['n_waveform'] = n_waveform
+								waveform.set_index('n_waveform', inplace=True)
+								waveforms_dumper.append(waveform)
 								
 								parsed_from_waveform = parse_waveform(
 									PeakSignal(
@@ -117,8 +122,14 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 								parsed_data_dumper.append(parsed_from_waveform)
 								
 								n_waveform += 1
-					if report_progress:
-						reporter.update(1)
+					reporter.update(1) if reporter is not None else None
+		if not silent:
+			print(f'Finished measuring!')
+		if compress_waveforms_file:
+			if not silent:
+				print(f'Compressing waveforms file...')
+			compress_waveforms_sqlite(path_to_waveforms_file)
+			path_to_waveforms_file.unlink()
 
 def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:bool=True, draw_distributions:bool=False, strict_task_checking:bool=True):
 	"""Plot data parsed from a TCT 1D scan.
@@ -190,7 +201,7 @@ def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:
 					include_plotlyjs = 'cdn',
 				)
 
-def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:TelegramReporter=None):
+def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a several 1D scans with the TCT setup, one at each voltage.
 	
 	Arguments
@@ -279,25 +290,22 @@ if __name__ == '__main__':
 	
 	the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}')
 	
-	with Alberto.handle_task('TCT_scans', drop_old_data=False) as task_bureaucrat:
+	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			try:
 				for device_name in scans_config.index:
-					Mariano = task_bureaucrat.create_subrun(create_a_timestamp() + '_' + f'{device_name}_TCT1DScansSweepingV' + ('_preview' if preview_mode else ''))
+					Mariano = employee.create_subrun(create_a_timestamp() + '_' + f'{device_name}_TCT1DScan' + ('_preview' if preview_mode=='yes' else ''))
 				
-					the_setup.set_current_compliance(amperes=10e-6)
+					the_setup.set_current_compliance(amperes=20e-6)
 					the_setup.set_bias_output_status('on')
-					the_setup.set_laser_DAC(660)
+					the_setup.set_laser_DAC(600)
 					the_setup.set_laser_frequency(1000)
 					the_setup.set_laser_status('on')
 					
-					TCT_1D_scan_sweeping_bias_voltage(
+					the_setup.set_bias_voltage(volts=222)
+					
+					TCT_1D_scan(
 						bureaucrat = Mariano,
-						voltages = interlace(np.linspace(
-							scans_config.loc[device_name,'highest_voltage (V)'],
-							scans_config.loc[device_name,'lowest_voltage (V)'],
-							scans_config.loc[device_name,'n_voltages'],
-						)),
 						the_setup = the_setup,
 						positions = create_list_of_positions(
 							device_center_xyz = tuple([scans_config.loc[device_name,coord]*1e-6 for coord in ('x_center (µm)','y_center (µm)','z_center (µm)')]),
@@ -305,14 +313,39 @@ if __name__ == '__main__':
 							scan_angle_deg = scans_config.loc[device_name,'scan_angle (deg)'],
 							scan_step = scans_config.loc[device_name,'scan_step (µm)']*1e-6,
 						),
-						n_triggers_per_position = scans_config.loc[device_name,'n_triggers_per_position'],
 						acquire_channels = scans_config.loc[device_name,'acquire_channels'],
-						silent = False,
-						reporter = TelegramReporter(
-							telegram_token = my_telegram_bots.robobot.token, 
-							telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
-						),
+						n_triggers_per_position = scans_config.loc[device_name,'n_triggers_per_position'],
+						silent = False, 
+						reporter = SafeTelegramReporter4Loops(
+							bot_token = my_telegram_bots.robobot.token, 
+							chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+						)
 					)
+					
+					plot_parsed_data_from_TCT_1D_scan(Mariano)
+					
+					# ~ TCT_1D_scan_sweeping_bias_voltage(
+						# ~ bureaucrat = Mariano,
+						# ~ voltages = interlace(np.linspace(
+							# ~ scans_config.loc[device_name,'highest_voltage (V)'],
+							# ~ scans_config.loc[device_name,'lowest_voltage (V)'],
+							# ~ scans_config.loc[device_name,'n_voltages'],
+						# ~ )),
+						# ~ the_setup = the_setup,
+						# ~ positions = create_list_of_positions(
+							# ~ device_center_xyz = tuple([scans_config.loc[device_name,coord]*1e-6 for coord in ('x_center (µm)','y_center (µm)','z_center (µm)')]),
+							# ~ scan_length = scans_config.loc[device_name,'scan_length (µm)']*1e-6,
+							# ~ scan_angle_deg = scans_config.loc[device_name,'scan_angle (deg)'],
+							# ~ scan_step = scans_config.loc[device_name,'scan_step (µm)']*1e-6,
+						# ~ ),
+						# ~ n_triggers_per_position = scans_config.loc[device_name,'n_triggers_per_position'],
+						# ~ acquire_channels = scans_config.loc[device_name,'acquire_channels'],
+						# ~ silent = False,
+						# ~ reporter = TelegramReporter(
+							# ~ telegram_token = my_telegram_bots.robobot.token, 
+							# ~ telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+						# ~ ),
+					# ~ )
 			finally:	
-				the_setup.set_bias_output_status('off')
-				the_setup.set_laser_status('on')
+				# ~ the_setup.set_bias_output_status('off')
+				the_setup.set_laser_status('off')

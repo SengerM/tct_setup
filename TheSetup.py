@@ -6,8 +6,8 @@ from time import sleep
 import warnings
 from processfriendlylock.CrossProcessLock import CrossProcessNamedLock # https://github.com/SengerM/processfriendlylock
 import EasySensirion # https://github.com/SengerM/EasySensirion
-import ElectroAutomatikGmbHPy # https://github.com/SengerM/ElectroAutomatikGmbHPy
-from ElectroAutomatikGmbHPy.ElectroAutomatikGmbHPowerSupply import ElectroAutomatikGmbHPowerSupply # https://github.com/SengerM/ElectroAutomatikGmbHPy
+# ~ import ElectroAutomatikGmbHPy # https://github.com/SengerM/ElectroAutomatikGmbHPy
+# ~ from ElectroAutomatikGmbHPy.ElectroAutomatikGmbHPowerSupply import ElectroAutomatikGmbHPowerSupply # https://github.com/SengerM/ElectroAutomatikGmbHPy
 from threading import RLock
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -26,11 +26,11 @@ class TheTCTSetup:
 		
 		self._keithley = Keithley2470SafeForLGADs('USB0::1510::9328::04481179::0::INSTR', polarity = 'negative')
 		
-		list_of_Elektro_Automatik_devices_connected = ElectroAutomatikGmbHPy.find_elektro_automatik_devices()
-		if len(list_of_Elektro_Automatik_devices_connected) == 1:
-			self._peltier_DC_power_supply = ElectroAutomatikGmbHPowerSupply(list_of_Elektro_Automatik_devices_connected[0]['port'])
-		else:
-			raise RuntimeError(f'Cannot autodetect the Elektro-Automatik power source because eiter it is not connected to the computer or there is more than one Elektro-Automatik device connected.')
+		# ~ list_of_Elektro_Automatik_devices_connected = ElectroAutomatikGmbHPy.find_elektro_automatik_devices()
+		# ~ if len(list_of_Elektro_Automatik_devices_connected) == 1:
+			# ~ self._peltier_DC_power_supply = ElectroAutomatikGmbHPowerSupply(list_of_Elektro_Automatik_devices_connected[0]['port'])
+		# ~ else:
+			# ~ raise RuntimeError(f'Cannot autodetect the Elektro-Automatik power source because eiter it is not connected to the computer or there is more than one Elektro-Automatik device connected.')
 		
 		self._sensirion_sensor = EasySensirion.SensirionSensor()
 		
@@ -288,12 +288,20 @@ class TheTCTSetup:
 	def measure_temperature(self)->float:
 		"""Returns a reading of the temperature as a float number in Celsius."""
 		with self._sensirion_Lock:
-			return self._sensirion_sensor.temperature
+			try:
+				return self._sensirion_sensor.temperature
+			except Exception as e:
+				warnings.warn(f'Cannot measure temperature, reason: {repr(e)}')
+				return float('NaN')
 	
 	def measure_humidity(self)->float:
 		"""Returns a reading of the humidity as a float number in %RH."""
 		with self._sensirion_Lock:
-			return self._sensirion_sensor.humidity
+			try:
+				return self._sensirion_sensor.humidity
+			except Exception as e:
+				warnings.warn(f'Cannot measure humidity, reason: {repr(e)}')
+				return float('NaN')
 	
 	# Peltier power supply ---------------------------------------------
 	
@@ -706,15 +714,15 @@ def connect_me_with_the_setup(who:str):
 	return WhoWrapper(object_to_wrap=the_setup, who=who)
 
 if __name__=='__main__':
-	from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting
+	from progressreporting.TelegramProgressReporter import SafeTelegramReporter4Loops # https://github.com/SengerM/progressreporting
 	import my_telegram_bots
 	
 	class TheSetupManager(BaseManager):
 		pass
 	
-	reporter = TelegramReporter(
-		telegram_token = my_telegram_bots.robobot.token,
-		telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+	reporter = SafeTelegramReporter4Loops(
+		bot_token = my_telegram_bots.robobot.token,
+		chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 	)
 	
 	print('Opening the setup...')

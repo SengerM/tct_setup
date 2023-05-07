@@ -7,9 +7,9 @@ import datetime
 from grafica.plotly_utils.utils import line
 from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper, load_whole_dataframe # https://github.com/SengerM/huge_dataframe
 from contextlib import nullcontext
-from progressreporting.TelegramProgressReporter import TelegramReporter # https://github.com/SengerM/progressreporting
+from progressreporting.TelegramProgressReporter import SafeTelegramReporter4Loops # https://github.com/SengerM/progressreporting
 
-def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current_limit_amperes:float, n_measurements_per_voltage:int, time_between_each_measurement_seconds:float, time_after_changing_voltage_seconds:float, silent:bool=True, reporter:TelegramReporter=None):
+def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current_limit_amperes:float, n_measurements_per_voltage:int, time_between_each_measurement_seconds:float, time_after_changing_voltage_seconds:float, silent:bool=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform an IV curve measurement using the high voltage power supply.
 	
 	Arguments
@@ -33,7 +33,7 @@ def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current
 	silent: bool, default True
 		If `True`, not messages will be printed. If `False`, messages will
 		be printed showing the progress of the measurement.
-	reporter: TelegramReporter
+	reporter: SafeTelegramReporter4Loops
 		A reporter to report the progress of the script. Optional.
 	"""
 	current_current_compliance = the_setup.get_current_compliance()
@@ -43,8 +43,7 @@ def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current
 		with JuanCarlos.handle_task('iv_curve_measure') as JuanCarlos_employee:
 			the_setup.set_current_compliance(amperes=current_limit_amperes)
 			the_setup.set_bias_output_status(status='on')
-			report_progress = reporter is not None
-			with reporter.report_for_loop(len(voltages)*n_measurements_per_voltage, f'{JuanCarlos.run_name}') if report_progress else nullcontext() as reporter:
+			with reporter.report_loop(len(voltages)*n_measurements_per_voltage, JuanCarlos.run_name) if reporter is not None else nullcontext() as reporter:
 				with SQLiteDataFrameDumper(
 					JuanCarlos_employee.path_to_directory_of_my_task/'measured_data.sqlite',
 					dump_after_n_appends = 1e3,
@@ -71,8 +70,7 @@ def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current
 							)
 							measured_data_df.set_index(['n_voltage','n_measurement'], inplace=True)
 							data_dumper.append(measured_data_df)
-							if report_progress:
-								reporter.update(1)
+							reporter.update(1) if reporter is not None else None
 	finally:
 		the_setup.set_current_compliance(amperes=current_current_compliance)
 
@@ -108,7 +106,7 @@ if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
 	
-	VOLTAGES = np.linspace(0,166,11)
+	VOLTAGES = np.linspace(0,500,5)
 	
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
 		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + input('Measurement name? ').replace(' ','_'))
@@ -116,15 +114,15 @@ if __name__ == '__main__':
 		iv_curve_measure(
 			bureaucrat = Mariano,
 			voltages = list(VOLTAGES) + list(VOLTAGES)[::-1],
-			current_limit_amperes = 10e-6,
+			current_limit_amperes = 22e-6,
 			n_measurements_per_voltage = 2,
 			time_between_each_measurement_seconds = .1,
 			time_after_changing_voltage_seconds = 1,
 			the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}'),
 			silent = False,
-			reporter = TelegramReporter(
-				telegram_token = my_telegram_bots.robobot.token, 
-				telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+			reporter = SafeTelegramReporter4Loops(
+				bot_token = my_telegram_bots.robobot.token, 
+				chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 			)
 		)
 		

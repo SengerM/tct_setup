@@ -14,8 +14,11 @@ from pathlib import Path
 
 class TheTCTSetup:
 	def __init__(self):
+		print('Connecting with oscilloscope...')
 		self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('USB0::1535::4131::2810N60091::0::INSTR')
+		print('Oscilloscope connected!')
 		
+		print('Connecting with TCT...')
 		stages_coordinates = {
 			'00003A48': 'x',
 			'00003A57': 'y',
@@ -23,8 +26,11 @@ class TheTCTSetup:
 		}
 		ports_dict = map_coordinates_to_serial_ports(stages_coordinates)
 		self._tct = PyticularsTCT.TCT(x_stage_port=ports_dict['x'], y_stage_port=ports_dict['y'], z_stage_port=ports_dict['z'])
+		print('TCT connected!')
 		
+		print('Connecting with high voltage power supply...')
 		self._keithley = Keithley2470SafeForLGADs('USB0::1510::9328::04481179::0::INSTR', polarity = 'negative')
+		print('High voltage power supply connected!')
 		
 		# ~ list_of_Elektro_Automatik_devices_connected = ElectroAutomatikGmbHPy.find_elektro_automatik_devices()
 		# ~ if len(list_of_Elektro_Automatik_devices_connected) == 1:
@@ -32,7 +38,9 @@ class TheTCTSetup:
 		# ~ else:
 			# ~ raise RuntimeError(f'Cannot autodetect the Elektro-Automatik power source because eiter it is not connected to the computer or there is more than one Elektro-Automatik device connected.')
 		
+		print('Connecting with Sensirion...')
 		self._sensirion_sensor = EasySensirion.SensirionSensor()
+		print('Sensirion connected!')
 		
 		# Hardware specific locks ---
 		self._oscilloscope_Lock = RLock()
@@ -261,8 +269,6 @@ class TheTCTSetup:
 				raise RuntimeError('No oscilloscope found in the setup!')
 		if isinstance(waveform_data, dict):
 			waveform_data = [waveform_data]
-		for i in range(len(waveform_data)):
-			waveform_data[i]['Amplitude (V)'] *= -1
 		return waveform_data
 	
 	def set_oscilloscope_vdiv(self, n_channel:int, vdiv:float)->None:

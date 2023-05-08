@@ -94,17 +94,21 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 			columns = 'x (m)',
 		)
 		for col in set(xy_table.columns.get_level_values(0)):
-			for n_channel in set(averages.index.get_level_values('n_channel')):
-				fig = px.imshow(
-					xy_table[col].query(f'n_channel=={n_channel}').reset_index('n_channel', drop=True),
-					title = f'{col}, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
-					aspect = 'equal',
-					labels = dict(color = col),
-				)
-				fig.write_html(
-					employee.path_to_directory_of_my_task/f'{col}_{n_channel}.html',
-					include_plotlyjs = 'cdn',
-				)
+			numpy_array = numpy.array([xy_table[col].query(f'n_channel=={n_channel}').to_numpy() for n_channel in sorted(set(xy_table[col].index.get_level_values('n_channel')))])
+			
+			fig = px.imshow(
+				numpy_array,
+				title = f'{col}<br><sup>{bureaucrat.run_name}</sup>',
+				aspect = 'equal',
+				labels = dict(color = col),
+				facet_col = 0,
+			)
+			for i,n_channel in enumerate(sorted(set(xy_table[col].index.get_level_values('n_channel')))):
+				fig.layout.annotations[i].update(text=f'n_channel:{n_channel}')
+			fig.write_html(
+				employee.path_to_directory_of_my_task/f'{col}.html',
+				include_plotlyjs = 'cdn',
+			)
 
 if __name__ == '__main__':
 	import my_telegram_bots

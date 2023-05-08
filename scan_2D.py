@@ -100,7 +100,13 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 				numpy_array,
 				title = f'{col}<br><sup>{bureaucrat.run_name}</sup>',
 				aspect = 'equal',
-				labels = dict(color = col),
+				labels = dict(
+					color = col,
+					x = 'x (m)',
+					y = 'y (m)',
+				),
+				x = xy_table[col].columns,
+				y = xy_table[col].index.get_level_values(0).drop_duplicates(),
 				facet_col = 0,
 			)
 			for i,n_channel in enumerate(sorted(set(xy_table[col].index.get_level_values('n_channel')))):

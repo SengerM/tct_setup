@@ -15,7 +15,7 @@ from pathlib import Path
 class TheTCTSetup:
 	def __init__(self):
 		print('Connecting with oscilloscope...')
-		self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('USB0::1535::4131::2810N60091::0::INSTR')
+		self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('TCPIP::130.60.165.228::INSTR')
 		print('Oscilloscope connected!')
 		
 		print('Connecting with TCT...')

@@ -70,6 +70,7 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		)
 
 def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
+	"""Produce a set of general plots to explore the results from a 2D scan."""
 	bureaucrat.check_these_tasks_were_run_successfully('TCT_2D_scan')
 	
 	with bureaucrat.handle_task('plot_everything_from_TCT_2D_scan') as employee:
@@ -84,6 +85,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 		data.set_index(['n_x','n_y'], append=True, inplace=True)
 		for _ in {'x','y'}:
 			data[f'{_} (m)'] -= data[f'{_} (m)'].mean()
+		
 		averages = data.groupby(['n_pulse','n_channel','n_x','n_y']).agg(numpy.nanmedian)
 		averages = averages.query('n_pulse==1')
 		
@@ -93,12 +95,12 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 			index = ['y (m)','n_channel'],
 			columns = 'x (m)',
 		)
+		
 		for col in set(xy_table.columns.get_level_values(0)):
 			numpy_array = numpy.array([xy_table[col].query(f'n_channel=={n_channel}').to_numpy() for n_channel in sorted(set(xy_table[col].index.get_level_values('n_channel')))])
-			
 			fig = px.imshow(
 				numpy_array,
-				title = f'{col}<br><sup>{bureaucrat.run_name}</sup>',
+				title = f'{col} as a function of position<br><sup>{bureaucrat.run_name}</sup>',
 				aspect = 'equal',
 				labels = dict(
 					color = col,
@@ -109,12 +111,39 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 				y = xy_table[col].index.get_level_values(0).drop_duplicates(),
 				facet_col = 0,
 			)
+			fig.update_coloraxes(colorbar_title_side='right')
 			for i,n_channel in enumerate(sorted(set(xy_table[col].index.get_level_values('n_channel')))):
 				fig.layout.annotations[i].update(text=f'n_channel:{n_channel}')
 			fig.write_html(
 				employee.path_to_directory_of_my_task/f'{col}.html',
 				include_plotlyjs = 'cdn',
 			)
+
+def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
+	bureaucrat.create_run(if_exists='skip')
+	
+	with bureaucrat.handle_task('TCT_2D_scans_sweeping_bias_voltage') as employee:
+		with reporter.report_loop(len(voltages), bureaucrat.run_name) if reporter is not None else nullcontext() as reporter:
+			for voltage in voltages:
+				if not silent:
+					print(f'Setting bias voltage to {voltage} V...')
+				the_setup.set_bias_voltage(volts=voltage)
+				
+				b = employee.create_subrun(f'{bureaucrat.run_name}_{int(voltage)}V')
+				TCT_2D_scan(
+					bureaucrat = b,
+					the_setup = the_setup,
+					positions = positions,
+					acquire_channels = acquire_channels,
+					n_triggers_per_position = n_triggers_per_position,
+					silent = silent, 
+					reporter = reporter.create_subloop_reporter() if reporter is not None else None,
+					compress_waveforms_file = compress_waveforms_file,
+				)
+				if not silent:
+					print(f'Producing plots for {b.run_name}...')
+				plot_everything_from_TCT_2D_scan(b)
+				reporter.update(1) if reporter is not None else None
 
 if __name__ == '__main__':
 	import my_telegram_bots
@@ -145,36 +174,34 @@ if __name__ == '__main__':
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			try:
-				plot_everything_from_TCT_2D_scan(RunBureaucrat(Path('/home/tct/power_storage/senger_matias/TCT_data/deleteme/TCT_scans/subruns/20230507225347_DEBUGGING_TCT2DScan')))
-				# ~ Mariano = employee.create_subrun(create_a_timestamp() + '_' + f'DEBUGGING_TCT2DScan')
+				Mariano = employee.create_subrun(create_a_timestamp() + '_' + 'AC42')
 			
-				# ~ the_setup.set_current_compliance(amperes=20e-6)
-				# ~ the_setup.set_bias_output_status('on')
-				# ~ the_setup.set_laser_DAC(600)
-				# ~ the_setup.set_laser_frequency(1000)
-				# ~ the_setup.set_laser_status('on')
+				the_setup.set_current_compliance(amperes=80e-6)
+				the_setup.set_bias_output_status('on')
+				the_setup.set_laser_DAC(630)
+				the_setup.set_laser_frequency(1000)
+				the_setup.set_laser_status('on')
 				
-				# ~ the_setup.set_bias_voltage(volts=222)
-				
-				# ~ TCT_2D_scan(
-					# ~ bureaucrat = Mariano,
-					# ~ the_setup = the_setup,
-					# ~ positions = create_list_of_positions(
-						# ~ device_center_xyz = (-3620e-6,-145e-6,67957e-6),
-						# ~ x_span = 500e-6,
-						# ~ y_span = 500e-6,
-						# ~ x_step = 25e-6,
-						# ~ y_step = 25e-6,
-					# ~ ),
-					# ~ acquire_channels = [1,2,3,4],
-					# ~ n_triggers_per_position = 22,
-					# ~ silent = False, 
-					# ~ reporter = SafeTelegramReporter4Loops(
-						# ~ bot_token = my_telegram_bots.robobot.token, 
-						# ~ chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
-					# ~ )
-				# ~ )
-				# ~ plot_everything_from_TCT_2D_scan(Mariano)
+				TCT_2D_scans_sweeping_bias_voltage(
+					bureaucrat = Mariano,
+					the_setup = the_setup,
+					voltages = [300,200],
+					positions = create_list_of_positions(
+						device_center_xyz = (-3620e-6,-145e-6,67957e-6),
+						x_span = 550e-6,
+						y_span = 550e-6,
+						x_step = 10e-6,
+						y_step = 10e-6,
+					),
+					acquire_channels = [1,2,3,4],
+					n_triggers_per_position = 22,
+					silent = False, 
+					reporter = SafeTelegramReporter4Loops(
+						bot_token = my_telegram_bots.robobot.token, 
+						chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+					),
+					compress_waveforms_file = True,
+				)
 			finally:	
-				# ~ the_setup.set_bias_output_status('off')
+				the_setup.set_bias_output_status('off')
 				the_setup.set_laser_status('off')

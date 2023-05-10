@@ -169,7 +169,7 @@ if __name__ == '__main__':
 		
 		return positions
 	
-	the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}')
+	the_setup = connect_me_with_the_setup(who=f'scan_2D.py PID:{os.getpid()}')
 	
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():

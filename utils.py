@@ -10,6 +10,7 @@ import pickle
 import zipfile
 
 def create_a_timestamp():
+	print('Creating a timestamp, sleeping 1 second to ensure no two timestamps are identical...')
 	time.sleep(1) # This is to ensure that no two timestamps are the same.
 	return datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 

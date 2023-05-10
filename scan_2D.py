@@ -21,7 +21,10 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		An object to control the hardware.
 	positions: list of lists of tuples
 		A 2 dimensional list of lists of tuples specifying the positions
-		to measure. Each position is a tuple of float of the form `(x,y,z)`.
+		to measure. Each position is a tuple of float of the form `(x,y,z)`
+		or `None` if it is going to be skipped. This 2 dimensional list
+		must be of M×N, i.e. all rows and columns are complete and filled
+		with `None` in those places to be skipped.
 	acquire_channels: list of int
 		A list with the number of the channels to acquire from the oscilloscope.
 	n_triggers_per_position: int
@@ -34,14 +37,17 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 	"""
 	bureaucrat.create_run(if_exists='skip')
 	
+	if len(set([len(l) for l in positions])) != 1:
+		raise ValueError(f'`positions` is not a "matrix" in the sense that it is not M×N, it has rows of different lenghts. ')
+	
 	with bureaucrat.handle_task('TCT_2D_scan') as employee:
-		n_x = 0
 		n_position = 0
 		flattened_positions = []
 		df = []
-		for l1 in positions:
-			n_y = 0
-			for pos in l1:
+		for n_x,l1 in enumerate(positions):
+			for n_y,pos in enumerate(l1):
+				if pos is None:
+					continue
 				df.append(
 					{
 						'n_x': n_x,
@@ -53,9 +59,7 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 					}
 				)
 				flattened_positions.append(pos)
-				n_y += 1
 				n_position += 1
-			n_x += 1
 		df = pandas.DataFrame.from_records(df).set_index(['n_position','n_x','n_y'])
 		utils.save_dataframe(df, 'positions', employee.path_to_directory_of_my_task)
 		
@@ -174,7 +178,10 @@ if __name__ == '__main__':
 	
 	set_my_template_as_default()
 	
-	def create_list_of_positions(device_center_xyz:tuple, x_span:float, y_span:float, x_step:float, y_step:float):
+	# ~ plot_everything_from_TCT_2D_scan(RunBureaucrat(Path('/home/tct/power_storage/senger_matias/TCT_data/CNM_AC-LGAD/TCT_scans/subruns/20230510183803_AC61/TCT_2D_scans_sweeping_bias_voltage/subruns/20230510183803_AC61_500V')))
+	# ~ a
+	
+	def create_list_of_positions(device_center_xyz:tuple, x_span:float, y_span:float, x_step:float, y_step:float, readout_pads_to_remove:dict=None):
 		x = numpy.linspace(-x_span/2, x_span/2, int(x_span/x_step+1))
 		y = numpy.linspace(-y_span/2, y_span/2, int(y_span/y_step+1))
 		
@@ -185,6 +192,17 @@ if __name__ == '__main__':
 		yy += device_center_xyz[1]
 		
 		positions = [[(xx[nx,ny],yy[nx,ny],zz[nx,ny]) for ny in range(len(xx[nx]))] for nx in range(len(xx))]
+		if isinstance(readout_pads_to_remove, dict):
+			pitch = readout_pads_to_remove['pitch']
+			size = readout_pads_to_remove['size']
+			if readout_pads_to_remove['shape'] != 'square':
+				raise ValueError('Only implemented for square pads. ')
+			remove_these = numpy.full(xx.shape, False)
+			for row in [-1,1]:
+				for col in [-1,1]:
+					remove_these |= (xx-device_center_xyz[0]>(col*pitch-size)/2) & (xx-device_center_xyz[0]<(col*pitch+size)/2) & (yy-device_center_xyz[1]>(row*pitch-size)/2) & (yy-device_center_xyz[1]<(row*pitch+size)/2)
+		
+		positions = [[(xx[nx,ny],yy[nx,ny],zz[nx,ny]) if remove_these[nx,ny]==False else None for ny in range(len(xx[nx]))] for nx in range(len(xx))]
 		
 		return positions
 	

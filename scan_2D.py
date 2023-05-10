@@ -8,8 +8,9 @@ import numpy
 import utils
 from huge_dataframe.SQLiteDataFrame import load_whole_dataframe
 import plotly.express as px
+from multiprocessing import Process
 
-def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
+def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent:bool=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a 2D scan with the TCT setup.
 	
 	Arguments
@@ -66,8 +67,19 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 			n_triggers_per_position = n_triggers_per_position, 
 			silent = silent, 
 			reporter = reporter, 
-			compress_waveforms_file = compress_waveforms_file
 		)
+
+def compress_waveforms_file_in_2D_scan(bureaucrat:RunBureaucrat, silent:bool=True):
+	if len(bureaucrat.list_subruns_of_task('TCT_2D_scan')) != 1:
+		raise RuntimeError(f'Run {repr(bureaucrat.run_name)} located in "{bureaucrat.path_to_run_directory}" seems to be corrupted because I was expecting only a single subrun for the task "TCT_2D_scan" but it actually has {len(bureaucrat.list_subruns_of_task("TCT_2D_scan"))} subruns...')
+	flattened_1D_scan_subrun_bureaucrat = bureaucrat.list_subruns_of_task('TCT_2D_scan')[0]	
+	path_to_waveforms_file = flattened_1D_scan_subrun_bureaucrat.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite'
+	if not silent:
+		print(f'Compressing waveforms file in "{path_to_waveforms_file}"...')
+	utils.compress_waveforms_sqlite(path_to_waveforms_file)
+	if not silent:
+		print(f'Finished compressing waveforms file in "{path_to_waveforms_file}". ')
+	path_to_waveforms_file.unlink()
 
 def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 	"""Produce a set of general plots to explore the results from a 2D scan."""
@@ -119,7 +131,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 				include_plotlyjs = 'cdn',
 			)
 
-def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
+def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_files:bool=True):
 	bureaucrat.create_run(if_exists='skip')
 	
 	with bureaucrat.handle_task('TCT_2D_scans_sweeping_bias_voltage') as employee:
@@ -138,11 +150,18 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 					n_triggers_per_position = n_triggers_per_position,
 					silent = silent, 
 					reporter = reporter.create_subloop_reporter() if reporter is not None else None,
-					compress_waveforms_file = compress_waveforms_file,
 				)
+				
 				if not silent:
 					print(f'Producing plots for {b.run_name}...')
 				plot_everything_from_TCT_2D_scan(b)
+				
+				if compress_waveforms_files:
+					if not silent:
+						print(f'Compressing waveforms file...')
+					p = Process(target=compress_waveforms_file_in_2D_scan, args=(b, silent))
+					p.start() # Let's hope this ends before the next 2D scan finishes, otherwise this becomes a snowball...
+				
 				reporter.update(1) if reporter is not None else None
 
 if __name__ == '__main__':
@@ -200,7 +219,7 @@ if __name__ == '__main__':
 						bot_token = my_telegram_bots.robobot.token, 
 						chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 					),
-					compress_waveforms_file = True,
+					compress_waveforms_files = True,
 				)
 			finally:	
 				the_setup.set_bias_output_status('off')

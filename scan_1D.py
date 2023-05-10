@@ -15,7 +15,7 @@ import numpy as np
 from signals.PeakSignal import PeakSignal, draw_in_plotly # https://github.com/SengerM/signals
 import sqlite3
 
-def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
+def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a 1D scan with the TCT setup.
 	
 	Arguments
@@ -130,12 +130,6 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		if not silent:
 			print(f'Producing some plots of some of the waveforms...')
 		plot_some_random_waveforms(Raúls_employee, n_waveform, 20)
-		
-		if compress_waveforms_file:
-			if not silent:
-				print(f'Compressing waveforms file...')
-			compress_waveforms_sqlite(path_to_waveforms_file)
-			path_to_waveforms_file.unlink()
 
 def plot_some_random_waveforms(bureaucrat:TaskBureaucrat, total_number_of_waveforms:int, number_of_triggers_to_plot:int=20):
 	if not isinstance(bureaucrat, TaskBureaucrat):
@@ -240,7 +234,7 @@ def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:
 					include_plotlyjs = 'cdn',
 				)
 
-def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None):
+def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
 	"""Perform a several 1D scans with the TCT setup, one at each voltage.
 	
 	Arguments
@@ -292,6 +286,12 @@ def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volta
 							telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 						) if report_progress else None,
 					)
+					if compress_waveforms_file:
+						if not silent:
+							print(f'Compressing waveforms file...')
+						path_to_waveforms_file = Lorenzos_son.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite'
+						compress_waveforms_sqlite(path_to_waveforms_file)
+						path_to_waveforms_file.unlink()
 					try:
 						plot_parsed_data_from_TCT_1D_scan(bureaucrat=Lorenzos_son)
 					except Exception:

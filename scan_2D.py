@@ -44,8 +44,8 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		n_position = 0
 		flattened_positions = []
 		df = []
-		for n_x,l1 in enumerate(positions):
-			for n_y,pos in enumerate(l1):
+		for n_y,l1 in enumerate(positions):
+			for n_x,pos in enumerate(l1):
 				if pos is None:
 					continue
 				df.append(

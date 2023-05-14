@@ -199,10 +199,19 @@ if __name__ == '__main__':
 	import os
 	from grafica.plotly_utils.utils import set_my_template_as_default
 	
-	set_my_template_as_default()
+	#######################################################
 	
-	# ~ plot_everything_from_TCT_2D_scan(RunBureaucrat(Path('/home/tct/power_storage/senger_matias/TCT_data/CNM_AC-LGAD/TCT_scans/subruns/20230510183803_AC61/TCT_2D_scans_sweeping_bias_voltage/subruns/20230510183803_AC61_500V')))
-	# ~ a
+	X_SPAN = 400e-6
+	Y_SPAN = X_SPAN
+	X_STEP = 7e-6
+	Y_STEP = X_STEP
+	DEVICE_NAME = 'AC62'
+	DEVICE_CENTER = (-3655e-6,-199e-6,67996e-6)
+	VOLTAGES = [300,200]
+	
+	#######################################################
+	
+	set_my_template_as_default()
 	
 	def create_list_of_positions(device_center_xyz:tuple, x_span:float, y_span:float, x_step:float, y_step:float, readout_pads_to_remove:dict=None):
 		x = numpy.linspace(-x_span/2, x_span/2, int(x_span/x_step+1))
@@ -214,7 +223,6 @@ if __name__ == '__main__':
 		xx += device_center_xyz[0]
 		yy += device_center_xyz[1]
 		
-		positions = [[(xx[nx,ny],yy[nx,ny],zz[nx,ny]) for ny in range(len(xx[nx]))] for nx in range(len(xx))]
 		if isinstance(readout_pads_to_remove, dict):
 			pitch = readout_pads_to_remove['pitch']
 			size = readout_pads_to_remove['size']
@@ -229,29 +237,44 @@ if __name__ == '__main__':
 		
 		return positions
 	
-	the_setup = connect_me_with_the_setup(who=f'scan_2D.py PID:{os.getpid()}')
+	is_preview = input("Preview? (yes/no) ")
+	if is_preview not in {'yes','no'}:
+		raise ValueError(f'Your answer has to be either yes or no, but you said {repr(is_preview)}.')
+	is_preview = is_preview == 'yes'
 	
+	if is_preview:
+		print('Preview mode enabled!')
+		X_STEP = X_SPAN/6
+		Y_STEP = Y_SPAN/6
+		VOLTAGES = [VOLTAGES[0]]
+	
+	the_setup = connect_me_with_the_setup(who=f'scan_2D.py PID:{os.getpid()}')
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			try:
-				Mariano = employee.create_subrun(create_a_timestamp() + '_' + 'AC42')
+				Mariano = employee.create_subrun(create_a_timestamp() + '_' + DEVICE_NAME + ('_preview' if is_preview else ''))
 			
 				the_setup.set_current_compliance(amperes=80e-6)
 				the_setup.set_bias_output_status('on')
-				the_setup.set_laser_DAC(630)
+				the_setup.set_laser_DAC(640)
 				the_setup.set_laser_frequency(1000)
 				the_setup.set_laser_status('on')
 				
 				TCT_2D_scans_sweeping_bias_voltage(
 					bureaucrat = Mariano,
 					the_setup = the_setup,
-					voltages = [300,200],
+					voltages = VOLTAGES,
 					positions = create_list_of_positions(
-						device_center_xyz = (-3620e-6,-145e-6,67957e-6),
-						x_span = 550e-6,
-						y_span = 550e-6,
-						x_step = 10e-6,
-						y_step = 10e-6,
+						device_center_xyz = DEVICE_CENTER,
+						x_span = X_SPAN,
+						y_span = Y_SPAN,
+						x_step = X_STEP,
+						y_step = Y_STEP,
+						readout_pads_to_remove = dict(
+							pitch = 200e-6,
+							size = 88e-6,
+							shape = 'square',
+						),
 					),
 					acquire_channels = [1,2,3,4],
 					n_triggers_per_position = 22,
@@ -262,6 +285,6 @@ if __name__ == '__main__':
 					),
 					compress_waveforms_files = True,
 				)
-			finally:	
+			finally:
 				the_setup.set_bias_output_status('off')
 				the_setup.set_laser_status('off')

@@ -115,7 +115,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 		)
 		
 		for col in set(xy_table.columns.get_level_values(0)):
-			numpy_array = numpy.array([xy_table[col].query(f'n_channel=={n_channel}').to_numpy() for n_channel in sorted(set(xy_table[col].index.get_level_values('n_channel')))])
+			numpy_array = numpy.array([numpy.flip(xy_table[col].query(f'n_channel=={n_channel}').to_numpy(),axis=1) for n_channel in sorted(set(xy_table[col].index.get_level_values('n_channel')))])
 			fig = px.imshow(
 				numpy_array,
 				title = f'{col} as a function of position<br><sup>{bureaucrat.run_name}</sup>',

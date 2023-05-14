@@ -9,6 +9,8 @@ import utils
 from huge_dataframe.SQLiteDataFrame import load_whole_dataframe
 import plotly.express as px
 from multiprocessing import Process
+from grafica.plotly_utils.utils import scatter_histogram
+import plotly.graph_objects as go
 
 def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent:bool=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a 2D scan with the TCT setup.
@@ -126,6 +128,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 				x = xy_table[col].columns,
 				y = xy_table[col].index.get_level_values(0).drop_duplicates(),
 				facet_col = 0,
+				origin = 'lower',
 			)
 			fig.update_coloraxes(colorbar_title_side='right')
 			for i,n_channel in enumerate(sorted(set(xy_table[col].index.get_level_values('n_channel')))):
@@ -134,6 +137,26 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 				employee.path_to_directory_of_my_task/f'{col}.html',
 				include_plotlyjs = 'cdn',
 			)
+		
+		for col in {'t_50 (s)','Amplitude (V)'}:
+			fig = go.Figure()
+			for n_channel in sorted(set(data.index.get_level_values('n_channel'))):
+				fig.add_trace(
+					scatter_histogram(
+						samples = data.query('n_pulse==1').query(f'n_channel=={n_channel}')[col],
+						name = f'n_channel={n_channel}',
+					)
+				)
+			fig.update_yaxes(type="log", title='counts')
+			fig.update_xaxes(title=col)
+			fig.update_layout(
+				title = f'{col} distribution<br><sup>{bureaucrat.run_name}</sup>',
+			)
+			fig.write_html(
+				employee.path_to_directory_of_my_task/f'{col}_histogram.html',
+				include_plotlyjs = 'cdn',
+			)
+			
 
 def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_files:bool=True):
 	bureaucrat.create_run(if_exists='skip')

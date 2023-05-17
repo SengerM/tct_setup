@@ -85,14 +85,14 @@ def iv_curve_plot(bureaucrat:RunBureaucrat):
 		mean_measured_data_df['Bias current (A)'] *= -1 # So the logarithmic plot don't fails.
 		mean_measured_data_df['Bias voltage (V)'] *= -1 # So the curve is in the positive quadrant.
 		fig = line(
-			data_frame = mean_measured_data_df,
+			data_frame = mean_measured_data_df.reset_index(),
 			x = 'Bias voltage (V)',
 			y = 'Bias current (A)',
 			error_y = 'Bias current std (A)',
 			error_y_mode = 'band',
-			title = f'IV curve<br><sup>Measurement: {JuanCarlos.run_name}</sup>',
+			title = f'IV curve<br><sup>{JuanCarlos.run_name}</sup>',
 			markers = '.',
-			# ~ hover_data = ['Temperature (°C)','Humidity (%RH)','n_voltage'],
+			hover_data = ['n_voltage'],
 		)
 		fig.write_html(str(JuanCarlos_employee.path_to_directory_of_my_task/Path(f'iv_curve_lin_scale.html')), include_plotlyjs='cdn')
 		fig.update_yaxes(type='log')
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
 	
-	VOLTAGES = np.linspace(0,500,5)
+	VOLTAGES = np.linspace(0,111,22)
 	
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
 		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + input('Measurement name? ').replace(' ','_'))
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 		iv_curve_measure(
 			bureaucrat = Mariano,
 			voltages = list(VOLTAGES) + list(VOLTAGES)[::-1],
-			current_limit_amperes = 22e-6,
+			current_limit_amperes = 1e-6,
 			n_measurements_per_voltage = 2,
 			time_between_each_measurement_seconds = .1,
 			time_after_changing_voltage_seconds = 1,

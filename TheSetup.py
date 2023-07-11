@@ -16,7 +16,7 @@ class TheTCTSetup:
 	def __init__(self):
 		print('Connecting with oscilloscope...')
 		self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('TCPIP::130.60.165.228::INSTR')
-		print('Oscilloscope connected!')
+		print(f'Connected with oscilloscope: {self._LeCroy.idn}')
 		
 		print('Connecting with TCT...')
 		stages_coordinates = {
@@ -229,7 +229,7 @@ class TheTCTSetup:
 		system. Then it is stopped."""
 		with self._oscilloscope_Lock:
 			if hasattr(self, '_LeCroy'):
-				self._LeCroy.wait_for_single_trigger()
+				self._LeCroy.wait_for_single_trigger(timeout=5)
 			elif hasattr(self, '_drs4_evaluation_board'):
 				self._drs4_evaluation_board.wait_for_single_trigger()
 			else:

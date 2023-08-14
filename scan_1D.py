@@ -14,6 +14,7 @@ from grafica.plotly_utils.utils import line
 import numpy as np
 from signals.PeakSignal import PeakSignal, draw_in_plotly # https://github.com/SengerM/signals
 import sqlite3
+import logging
 
 def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a 1D scan with the TCT setup.
@@ -43,10 +44,10 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 	
 	with Raúl.handle_task('TCT_1D_scan') as Raúls_employee:
 		if not silent:
-			print(f'Waiting to acquire exclusive control of the hardware...')
+			logging.info(f'Waiting to acquire exclusive control of the hardware...')
 		with the_setup.hold_control_of_bias(), the_setup.hold_signal_acquisition(), the_setup.hold_tct_control():
 			if not silent:
-				print(f'Control of hardware acquired!')
+				logging.info(f'Control of hardware acquired!')
 			the_setup.configure_oscilloscope_for_two_pulses()
 			the_setup.configure_oscilloscope_sequence_acquisition(n_sequences_per_trigger = int(n_triggers_per_position))
 			the_setup.set_laser_status(status='on') # Make sure the laser is on...
@@ -63,7 +64,7 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 					sleep(0.5) # Wait for any transient after moving the motors.
 
 					if not silent:
-						print(f'Measuring: n_position={n_position}/{len(positions)-1}...')
+						logging.info(f'Measuring: n_position={n_position}/{len(positions)-1}...')
 					
 					the_setup.wait_for_trigger()
 					
@@ -125,10 +126,10 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 								n_waveform += 1
 					reporter.update(1) if reporter is not None else None
 		if not silent:
-			print(f'Finished measuring!')
+			logging.info(f'Finished measuring!')
 		
 		if not silent:
-			print(f'Producing some plots of some of the waveforms...')
+			logging.info(f'Producing some plots of some of the waveforms...')
 		plot_some_random_waveforms(Raúls_employee, n_waveform, 20)
 
 def plot_some_random_waveforms(bureaucrat:TaskBureaucrat, total_number_of_waveforms:int, number_of_triggers_to_plot:int=20):
@@ -263,15 +264,15 @@ def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volta
 	
 	with Lorenzo.handle_task('TCT_1D_scan_sweeping_bias_voltage') as Lorenzos_employee:
 		if not silent:
-			print(f'Waiting for acquiring the control of the hardware...')
+			logging.info(f'Waiting for acquiring the control of the hardware...')
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			if not silent:
-				print(f'Control of hardware acquired!')
+				logging.info(f'Control of hardware acquired!')
 			report_progress = reporter is not None
 			with reporter.report_for_loop(len(voltages), f'{Lorenzo.run_name}') if report_progress else nullcontext() as reporter:
 				for voltage in voltages:
 					if not silent:
-						print('Setting bias voltage...')
+						logging.info('Setting bias voltage...')
 					the_setup.set_bias_voltage(volts=voltage)
 					Lorenzos_son = Lorenzos_employee.create_subrun(subrun_name=f'{Lorenzo.run_name}_{int(voltage)}V')
 					TCT_1D_scan(
@@ -288,7 +289,7 @@ def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volta
 					)
 					if compress_waveforms_file:
 						if not silent:
-							print(f'Compressing waveforms file...')
+							logging.info(f'Compressing waveforms file...')
 						path_to_waveforms_file = Lorenzos_son.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite'
 						compress_waveforms_sqlite(path_to_waveforms_file)
 						path_to_waveforms_file.unlink()
@@ -297,7 +298,7 @@ def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volta
 					except Exception:
 						pass
 					if not silent:
-						print(f'Finished {Lorenzos_son.run_name}.')
+						logging.info(f'Finished {Lorenzos_son.run_name}.')
 					reporter.update(1)
 
 if __name__ == '__main__':

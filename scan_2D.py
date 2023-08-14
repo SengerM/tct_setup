@@ -11,6 +11,7 @@ import plotly.express as px
 from multiprocessing import Process
 from grafica.plotly_utils.utils import scatter_histogram
 import plotly.graph_objects as go
+import logging
 
 def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent:bool=True, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a 2D scan with the TCT setup.
@@ -81,10 +82,10 @@ def compress_waveforms_file_in_2D_scan(bureaucrat:RunBureaucrat, silent:bool=Tru
 	flattened_1D_scan_subrun_bureaucrat = bureaucrat.list_subruns_of_task('TCT_2D_scan')[0]	
 	path_to_waveforms_file = flattened_1D_scan_subrun_bureaucrat.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite'
 	if not silent:
-		print(f'Compressing waveforms file in "{path_to_waveforms_file}"...')
+		logging.info(f'Compressing waveforms file in "{path_to_waveforms_file}"...')
 	utils.compress_waveforms_sqlite(path_to_waveforms_file)
 	if not silent:
-		print(f'Finished compressing waveforms file in "{path_to_waveforms_file}". ')
+		logging.info(f'Finished compressing waveforms file in "{path_to_waveforms_file}". ')
 	path_to_waveforms_file.unlink()
 
 def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
@@ -165,7 +166,7 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 		with reporter.report_loop(len(voltages), bureaucrat.run_name) if reporter is not None else nullcontext() as reporter:
 			for voltage in voltages:
 				if not silent:
-					print(f'Setting bias voltage to {voltage} V...')
+					logging.info(f'Setting bias voltage to {voltage} V...')
 				the_setup.set_bias_voltage(volts=voltage)
 				
 				b = employee.create_subrun(f'{bureaucrat.run_name}_{int(voltage)}V')
@@ -180,12 +181,12 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 				)
 				
 				if not silent:
-					print(f'Producing plots for {b.run_name}...')
+					logging.info(f'Producing plots for {b.run_name}...')
 				plot_everything_from_TCT_2D_scan(b)
 				
 				if compress_waveforms_files:
 					if not silent:
-						print(f'Compressing waveforms file...')
+						logging.info(f'Compressing waveforms file...')
 					p = Process(target=compress_waveforms_file_in_2D_scan, args=(b, silent))
 					p.start() # Let's hope this ends before the next 2D scan finishes, otherwise this becomes a snowball...
 				
@@ -198,16 +199,32 @@ if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
 	from grafica.plotly_utils.utils import set_my_template_as_default
+	import sys
+	
+	logging.basicConfig(
+		stream = sys.stderr, 
+		level = logging.INFO,
+		format = '%(asctime)s|%(levelname)s|%(funcName)s|%(message)s',
+		datefmt = '%Y-%m-%d %H:%M:%S',
+	)
 	
 	#######################################################
 	
-	X_SPAN = 400e-6
+	X_SPAN = 1111e-6
 	Y_SPAN = X_SPAN
-	X_STEP = 7e-6
+	X_STEP = 25e-6
 	Y_STEP = X_STEP
-	DEVICE_NAME = 'AC62'
-	DEVICE_CENTER = (-3655e-6,-199e-6,67996e-6)
-	VOLTAGES = [300,200]
+	DEVICE_NAME = 'CNM_AC-LGAD_testing_CAEN'
+	DEVICE_CENTER = (-3817e-6,1914e-6,75019e-6)
+	VOLTAGES = [111]
+	LASER_DAC = 111
+	N_TRIGGERS_PER_POSITION = 22
+	CURRENT_COMPLIANCE_AMPERES = 11e-6
+	REMOVE_PADS = None#dict(
+		# ~ pitch = 500e-6,
+		# ~ size = 200e-6,
+		# ~ shape = 'square',
+	# ~ )
 	
 	#######################################################
 	
@@ -223,12 +240,12 @@ if __name__ == '__main__':
 		xx += device_center_xyz[0]
 		yy += device_center_xyz[1]
 		
+		remove_these = numpy.full(xx.shape, False)
 		if isinstance(readout_pads_to_remove, dict):
 			pitch = readout_pads_to_remove['pitch']
 			size = readout_pads_to_remove['size']
 			if readout_pads_to_remove['shape'] != 'square':
 				raise ValueError('Only implemented for square pads. ')
-			remove_these = numpy.full(xx.shape, False)
 			for row in [-1,1]:
 				for col in [-1,1]:
 					remove_these |= (xx-device_center_xyz[0]>(col*pitch-size)/2) & (xx-device_center_xyz[0]<(col*pitch+size)/2) & (yy-device_center_xyz[1]>(row*pitch-size)/2) & (yy-device_center_xyz[1]<(row*pitch+size)/2)
@@ -243,20 +260,20 @@ if __name__ == '__main__':
 	is_preview = is_preview == 'yes'
 	
 	if is_preview:
-		print('Preview mode enabled!')
-		X_STEP = X_SPAN/6
-		Y_STEP = Y_SPAN/6
+		logging.info('Preview mode enabled!')
+		X_STEP = X_SPAN/8
+		Y_STEP = Y_SPAN/8
 		VOLTAGES = [VOLTAGES[0]]
 	
 	the_setup = connect_me_with_the_setup(who=f'scan_2D.py PID:{os.getpid()}')
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			try:
-				Mariano = employee.create_subrun(create_a_timestamp() + '_' + DEVICE_NAME + ('_preview' if is_preview else ''))
+				Mariano = employee.create_subrun(create_a_timestamp() + '_' + DEVICE_NAME + ('_preview' if is_preview else '') + f'_Step{X_STEP*1e6:.0f}um' + f'_n_trigs{N_TRIGGERS_PER_POSITION}')
 			
-				the_setup.set_current_compliance(amperes=80e-6)
+				the_setup.set_current_compliance(amperes=CURRENT_COMPLIANCE_AMPERES)
 				the_setup.set_bias_output_status('on')
-				the_setup.set_laser_DAC(640)
+				the_setup.set_laser_DAC(LASER_DAC)
 				the_setup.set_laser_frequency(1000)
 				the_setup.set_laser_status('on')
 				
@@ -270,14 +287,10 @@ if __name__ == '__main__':
 						y_span = Y_SPAN,
 						x_step = X_STEP,
 						y_step = Y_STEP,
-						readout_pads_to_remove = dict(
-							pitch = 200e-6,
-							size = 88e-6,
-							shape = 'square',
-						),
+						readout_pads_to_remove = REMOVE_PADS,
 					),
-					acquire_channels = [1,2,3,4],
-					n_triggers_per_position = 22,
+					acquire_channels = list(range(16)),
+					n_triggers_per_position = N_TRIGGERS_PER_POSITION,
 					silent = False, 
 					reporter = SafeTelegramReporter4Loops(
 						bot_token = my_telegram_bots.robobot.token, 
@@ -286,5 +299,6 @@ if __name__ == '__main__':
 					compress_waveforms_files = True,
 				)
 			finally:
+				logging.info('Finalizing scan...')
 				the_setup.set_bias_output_status('off')
 				the_setup.set_laser_status('off')

@@ -58,7 +58,7 @@ def parse_waveforms(bureaucrat:RunBureaucrat, name_of_task_that_produced_the_wav
 					f'SELECT * from dataframe_table where n_waveform=={n_waveform}',
 					sqlite_connection,
 				)
-				parsed_from_waveform = parse_waveform(PeakSignal(time=waveform_df['Time (s)'], samples=waveform_df['Amplitude (V)']))
+				parsed_from_waveform = parse_waveform(PeakSignal(time=waveform_df['Time (s)'], samples=waveform_df['Amplitude (V)'], peak_polarity='guess'))
 				parsed_from_waveform['n_waveform'] = n_waveform
 				parsed_from_waveform_df = pandas.DataFrame(
 					parsed_from_waveform,

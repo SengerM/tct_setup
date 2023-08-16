@@ -1,8 +1,9 @@
 import PyticularsTCT # https://github.com/SengerM/PyticularsTCT
 from PyticularsTCT.find_ximc_stages import map_coordinates_to_serial_ports # https://github.com/SengerM/PyticularsTCT
 import TeledyneLeCroyPy # https://github.com/SengerM/TeledyneLeCroyPy
+from CAENpy.CAENDigitizer import CAEN_DT5742_Digitizer
 from keithley.Keithley2470 import Keithley2470SafeForLGADs # https://github.com/SengerM/keithley
-from time import sleep
+import time
 import warnings
 from processfriendlylock.CrossProcessLock import CrossProcessNamedLock # https://github.com/SengerM/processfriendlylock
 import EasySensirion # https://github.com/SengerM/EasySensirion
@@ -11,14 +12,19 @@ import EasySensirion # https://github.com/SengerM/EasySensirion
 from threading import RLock
 from multiprocessing.managers import BaseManager
 from pathlib import Path
+import logging
 
 class TheTCTSetup:
 	def __init__(self):
-		print('Connecting with oscilloscope...')
-		self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('TCPIP::130.60.165.228::INSTR')
-		print(f'Connected with oscilloscope: {self._LeCroy.idn}')
+		# ~ logging.info('Connecting with oscilloscope...')
+		# ~ self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('TCPIP::130.60.165.228::INSTR')
+		# ~ logging.info(f'Connected with oscilloscope: {self._LeCroy.idn}')
 		
-		print('Connecting with TCT...')
+		logging.info('Connecting with CAEN digitizer...')
+		self._CAEN_digitizer = CAEN_DT5742_Digitizer(0)
+		logging.info(f'Connected with CAEN digitizer {repr(self._CAEN_digitizer.idn)}!')
+		
+		logging.info('Connecting with TCT...')
 		stages_coordinates = {
 			'00003A48': 'x',
 			'00003A57': 'y',
@@ -26,11 +32,11 @@ class TheTCTSetup:
 		}
 		ports_dict = map_coordinates_to_serial_ports(stages_coordinates)
 		self._tct = PyticularsTCT.TCT(x_stage_port=ports_dict['x'], y_stage_port=ports_dict['y'], z_stage_port=ports_dict['z'])
-		print('TCT connected!')
+		logging.info('TCT connected!')
 		
-		print('Connecting with high voltage power supply...')
+		logging.info('Connecting with high voltage power supply...')
 		self._keithley = Keithley2470SafeForLGADs('USB0::1510::9328::04481179::0::INSTR', polarity = 'negative')
-		print('High voltage power supply connected!')
+		logging.info('High voltage power supply connected!')
 		
 		# ~ list_of_Elektro_Automatik_devices_connected = ElectroAutomatikGmbHPy.find_elektro_automatik_devices()
 		# ~ if len(list_of_Elektro_Automatik_devices_connected) == 1:
@@ -38,9 +44,9 @@ class TheTCTSetup:
 		# ~ else:
 			# ~ raise RuntimeError(f'Cannot autodetect the Elektro-Automatik power source because eiter it is not connected to the computer or there is more than one Elektro-Automatik device connected.')
 		
-		print('Connecting with Sensirion...')
+		logging.info('Connecting with Sensirion...')
 		self._sensirion_sensor = EasySensirion.SensirionSensor()
-		print('Sensirion connected!')
+		logging.info('Sensirion connected!')
 		
 		# Hardware specific locks ---
 		self._oscilloscope_Lock = RLock()
@@ -196,6 +202,21 @@ class TheTCTSetup:
 				self._drs4_evaluation_board.enable_trigger(True,False) # Don't know what this line does, it was in the example `drs_exam.cpp`.
 				self._drs4_evaluation_board.set_trigger_source('ext')
 				self._drs4_evaluation_board.set_trigger_delay(seconds=130e-9-40e-9) # Totally empiric number.
+			elif hasattr(self, '_CAEN_digitizer'):
+				self._CAEN_digitizer.reset()
+				self._CAEN_digitizer.set_sampling_frequency(MHz=5000)
+				self._CAEN_digitizer.set_record_length(1024)
+				self._CAEN_digitizer.set_max_num_events_BLT(1)
+				self._CAEN_digitizer.set_acquisition_mode('sw_controlled')
+				self._CAEN_digitizer.set_ext_trigger_input_mode('disabled')
+				self._CAEN_digitizer.set_fast_trigger_mode(enabled=True)
+				self._CAEN_digitizer.set_fast_trigger_digitizing(enabled=True)
+				self._CAEN_digitizer.enable_channels(group_1=True, group_2=True)
+				self._CAEN_digitizer.set_fast_trigger_DC_offset(V=0)
+				self._CAEN_digitizer.set_post_trigger_size(50)
+				for ch in [0,1]:
+					self._CAEN_digitizer.set_trigger_polarity(channel=ch, edge='falling')
+				self._CAEN_digitizer.set_fast_trigger_threshold(20934)
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
 	
@@ -219,10 +240,15 @@ class TheTCTSetup:
 		if n_sequences_per_trigger<=0:
 			raise ValueError(f'`n_sequences_per_trigger` must be > 0.')
 		with self._oscilloscope_Lock:
-			if n_sequences_per_trigger == 1:
-				self._LeCroy.sampling_mode_sequence('off')
+			if hasattr(self, '_LeCroy'):
+				if n_sequences_per_trigger == 1:
+					self._LeCroy.sampling_mode_sequence('off')
+				else:
+					self._LeCroy.sampling_mode_sequence('on', number_of_segments=n_sequences_per_trigger)
+			elif hasattr(self, '_CAEN_digitizer'):
+				self._CAEN_digitizer.set_max_num_events_BLT(n_sequences_per_trigger)
 			else:
-				self._LeCroy.sampling_mode_sequence('on', number_of_segments=n_sequences_per_trigger)
+				raise RuntimeError('No oscilloscope found in the setup!')
 	
 	def wait_for_trigger(self)->None:
 		"""Blocks execution until there is a trigger in the acquisition
@@ -232,8 +258,12 @@ class TheTCTSetup:
 				self._LeCroy.wait_for_single_trigger(timeout=5)
 			elif hasattr(self, '_drs4_evaluation_board'):
 				self._drs4_evaluation_board.wait_for_single_trigger()
+			elif hasattr(self, '_CAEN_digitizer'):
+				with self._CAEN_digitizer: # Enable acquisition and wait.
+					self._CAEN_digitizer.wait_for(at_least_one_event=False, memory_full=True, timeout_seconds=11) # The full memory is 1024 events, in this way we make sure there are enough events to readout after this.
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
+			self._last_trigger_time = time.time()
 	
 	def get_waveform(self, n_channel:int)->list:
 		"""Gets the waveform from the acquisition system for the specified 
@@ -265,6 +295,16 @@ class TheTCTSetup:
 				waveform_data = self._LeCroy.get_waveform(n_channel=n_channel)['waveforms']
 			elif hasattr(self, '_drs4_evaluation_board'):
 				waveform_data = self._drs4_evaluation_board.get_waveform(n_channel)
+			elif hasattr(self, '_CAEN_digitizer'):
+				if not hasattr(self,'_last_waveforms_readout_time') or self._last_waveforms_readout_time<self._last_trigger_time:
+					self._latest_waveforms = self._CAEN_digitizer.get_waveforms(get_time=True, get_ADCu_instead_of_volts=False)
+					self._last_waveforms_readout_time = time.time()
+				waveform_data = [event_data[f'CH{n_channel}'] for event_data in self._latest_waveforms]
+				# The following is because of bugs in the CAEN digitizers, it is better to drop data close to the edges of the time window.
+				drop_these_data = (waveform_data[0]['Time (s)']>140e-9)
+				for i,event_data in enumerate(waveform_data):
+					for time_amp,data in event_data.items():
+						waveform_data[i][time_amp] = data[~drop_these_data]
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
 		if isinstance(waveform_data, dict):
@@ -286,6 +326,8 @@ class TheTCTSetup:
 				self._LeCroy.set_vdiv(n_channel, vdiv)
 			elif hasattr(self, '_drs4_evaluation_board'):
 				warnings.warn(f'Cannot change VDIV of DRS4 Evaluation Board, it is not implemented.')
+			elif hasattr(self, '_CAEN_digitizer'):
+				warnings.warn(f'Cannot change VDIV of CAEN digitizer, this is an old stuff from the oscilloscope.')
 			else:
 				raise RuntimeError('No oscilloscope found in the setup!')
 	
@@ -722,6 +764,14 @@ def connect_me_with_the_setup(who:str):
 if __name__=='__main__':
 	from progressreporting.TelegramProgressReporter import SafeTelegramReporter4Loops # https://github.com/SengerM/progressreporting
 	import my_telegram_bots
+	import sys
+	
+	logging.basicConfig(
+		stream = sys.stderr, 
+		level = logging.INFO,
+		format = '%(asctime)s|%(levelname)s|%(funcName)s|%(message)s',
+		datefmt = '%Y-%m-%d %H:%M:%S',
+	)
 	
 	class TheSetupManager(BaseManager):
 		pass
@@ -731,13 +781,13 @@ if __name__=='__main__':
 		chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 	)
 	
-	print('Opening the setup...')
+	logging.info('Opening the setup...')
 	the_setup = TheTCTSetupWithNamedLocks()
 	
 	TheSetupManager.register('get_the_setup', callable=lambda:the_setup)
 	m = TheSetupManager(address=('', 50000), authkey=b'abracadabra')
 	s = m.get_server()
-	print('Ready!')
+	logging.info('Ready!')
 	try:
 		s.serve_forever()
 	except Exception as e:

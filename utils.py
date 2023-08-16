@@ -8,9 +8,10 @@ from huge_dataframe.SQLiteDataFrame import load_only_index_without_repeated_entr
 from signals.PeakSignal import PeakSignal, compress_PeakSignal_V230507, decompress_PeakSignal_V230507 # https://github.com/SengerM/signals
 import pickle
 import zipfile
+import logging
 
 def create_a_timestamp():
-	print('Creating a timestamp, sleeping 1 second to ensure no two timestamps are identical...')
+	logging.info('Creating a timestamp, sleeping 1 second to ensure no two timestamps are identical...')
 	time.sleep(1) # This is to ensure that no two timestamps are the same.
 	return datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 

@@ -9,11 +9,11 @@ import utils
 from huge_dataframe.SQLiteDataFrame import load_whole_dataframe
 import plotly.express as px
 from multiprocessing import Process
-from grafica.plotly_utils.utils import scatter_histogram
+from plotly_utils import scatter_histogram
 import plotly.graph_objects as go
 import logging
 
-def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent:bool=True, reporter:SafeTelegramReporter4Loops=None):
+def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform a 2D scan with the TCT setup.
 	
 	Arguments
@@ -32,9 +32,6 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		A list with the number of the channels to acquire from the oscilloscope.
 	n_triggers_per_position: int
 		Number of triggers to record at each position.
-	silent: bool, default True
-		If `True`, not messages will be printed. If `False`, messages will
-		be printed showing the progress of the measurement.
 	reporter: SafeTelegramReporter4Loops
 		A reporter to report the progress of the script. Optional.
 	"""
@@ -72,20 +69,17 @@ def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 			positions = flattened_positions, 
 			acquire_channels = acquire_channels, 
 			n_triggers_per_position = n_triggers_per_position, 
-			silent = silent, 
 			reporter = reporter, 
 		)
 
-def compress_waveforms_file_in_2D_scan(bureaucrat:RunBureaucrat, silent:bool=True):
+def compress_waveforms_file_in_2D_scan(bureaucrat:RunBureaucrat):
 	if len(bureaucrat.list_subruns_of_task('TCT_2D_scan')) != 1:
 		raise RuntimeError(f'Run {repr(bureaucrat.run_name)} located in "{bureaucrat.path_to_run_directory}" seems to be corrupted because I was expecting only a single subrun for the task "TCT_2D_scan" but it actually has {len(bureaucrat.list_subruns_of_task("TCT_2D_scan"))} subruns...')
 	flattened_1D_scan_subrun_bureaucrat = bureaucrat.list_subruns_of_task('TCT_2D_scan')[0]	
 	path_to_waveforms_file = flattened_1D_scan_subrun_bureaucrat.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite'
-	if not silent:
-		logging.info(f'Compressing waveforms file in "{path_to_waveforms_file}"...')
+	logging.info(f'Compressing waveforms file in "{path_to_waveforms_file}"...')
 	utils.compress_waveforms_sqlite(path_to_waveforms_file)
-	if not silent:
-		logging.info(f'Finished compressing waveforms file in "{path_to_waveforms_file}". ')
+	logging.info(f'Finished compressing waveforms file in "{path_to_waveforms_file}". ')
 	path_to_waveforms_file.unlink()
 
 def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
@@ -130,6 +124,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 				y = xy_table[col].index.get_level_values(0).drop_duplicates(),
 				facet_col = 0,
 				origin = 'lower',
+				width = 555*len(numpy_array),
 			)
 			fig.update_coloraxes(colorbar_title_side='right')
 			for i,n_channel in enumerate(sorted(set(xy_table[col].index.get_level_values('n_channel')))):
@@ -159,14 +154,13 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
 			)
 			
 
-def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, silent=True, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_files:bool=True):
+def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_files:bool=True):
 	bureaucrat.create_run(if_exists='skip')
 	
 	with bureaucrat.handle_task('TCT_2D_scans_sweeping_bias_voltage') as employee:
 		with reporter.report_loop(len(voltages), bureaucrat.run_name) if reporter is not None else nullcontext() as reporter:
 			for voltage in voltages:
-				if not silent:
-					logging.info(f'Setting bias voltage to {voltage} V...')
+				logging.info(f'Setting bias voltage to {voltage} V...')
 				the_setup.set_bias_voltage(volts=voltage)
 				
 				b = employee.create_subrun(f'{bureaucrat.run_name}_{int(voltage)}V')
@@ -176,18 +170,15 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 					positions = positions,
 					acquire_channels = acquire_channels,
 					n_triggers_per_position = n_triggers_per_position,
-					silent = silent, 
 					reporter = reporter.create_subloop_reporter() if reporter is not None else None,
 				)
 				
-				if not silent:
-					logging.info(f'Producing plots for {b.run_name}...')
+				logging.info(f'Producing plots for {b.run_name}...')
 				plot_everything_from_TCT_2D_scan(b)
 				
 				if compress_waveforms_files:
-					if not silent:
-						logging.info(f'Compressing waveforms file...')
-					p = Process(target=compress_waveforms_file_in_2D_scan, args=(b, silent))
+					logging.info(f'Compressing waveforms file...')
+					p = Process(target=compress_waveforms_file_in_2D_scan, args=(b, False))
 					p.start() # Let's hope this ends before the next 2D scan finishes, otherwise this becomes a snowball...
 				
 				reporter.update(1) if reporter is not None else None
@@ -198,7 +189,7 @@ if __name__ == '__main__':
 	from utils import create_a_timestamp
 	from TheSetup import connect_me_with_the_setup
 	import os
-	from grafica.plotly_utils.utils import set_my_template_as_default
+	from plotly_utils import set_my_template_as_default
 	import sys
 	
 	logging.basicConfig(
@@ -215,7 +206,7 @@ if __name__ == '__main__':
 	X_STEP = 25e-6
 	Y_STEP = X_STEP
 	DEVICE_NAME = 'CNM_AC-LGAD_testing_CAEN'
-	DEVICE_CENTER = (-3817e-6,1914e-6,75019e-6)
+	DEVICE_CENTER = (-3817e-6,1914e-6+200e-6,74292e-6)
 	VOLTAGES = [111]
 	LASER_DAC = 111
 	N_TRIGGERS_PER_POSITION = 22
@@ -291,14 +282,16 @@ if __name__ == '__main__':
 					),
 					acquire_channels = list(range(16)),
 					n_triggers_per_position = N_TRIGGERS_PER_POSITION,
-					silent = False, 
 					reporter = SafeTelegramReporter4Loops(
 						bot_token = my_telegram_bots.robobot.token, 
 						chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 					),
-					compress_waveforms_files = True,
+					compress_waveforms_files = False,
 				)
 			finally:
 				logging.info('Finalizing scan...')
+				logging.info('Turning off bias voltage... (patience please)')
 				the_setup.set_bias_output_status('off')
+				logging.info('Turning laser off...')
 				the_setup.set_laser_status('off')
+				logging.info('High voltage and laser are off.')

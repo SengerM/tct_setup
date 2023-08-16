@@ -192,8 +192,12 @@ def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:
 	with Néstor.handle_task('plot_parsed_data_from_TCT_1D_scan') as Néstors_employee:
 		parsed_data_df = load_whole_dataframe(Néstor.path_to_directory_of_task('TCT_1D_scan')/'parsed_from_waveforms.sqlite')
 		measured_data_df = load_whole_dataframe(Néstor.path_to_directory_of_task('TCT_1D_scan')/'measured_data.sqlite')
+		measured_data_df['When'] = pandas.to_datetime(measured_data_df['When'])
 		
 		data_df = measured_data_df.merge(parsed_data_df, left_index=True, right_index=True)
+		data_df = data_df.fillna(value=np.nan)
+		
+		data_df.drop(columns=['When'], inplace=True)
 		
 		data_df['Distance (m)'] = integrate_distance_given_path(list(data_df[['x (m)', 'y (m)', 'z (m)']].to_numpy()))
 		

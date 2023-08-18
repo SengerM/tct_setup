@@ -4,12 +4,13 @@ from time import sleep
 import pandas
 import plotly.express as px
 import datetime
-from grafica.plotly_utils.utils import line
+from plotly_utils import line, set_my_template_as_default
 from huge_dataframe.SQLiteDataFrame import SQLiteDataFrameDumper, load_whole_dataframe # https://github.com/SengerM/huge_dataframe
 from contextlib import nullcontext
 from progressreporting.TelegramProgressReporter import SafeTelegramReporter4Loops # https://github.com/SengerM/progressreporting
+import logging
 
-def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current_limit_amperes:float, n_measurements_per_voltage:int, time_between_each_measurement_seconds:float, time_after_changing_voltage_seconds:float, silent:bool=True, reporter:SafeTelegramReporter4Loops=None):
+def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current_limit_amperes:float, n_measurements_per_voltage:int, time_between_each_measurement_seconds:float, time_after_changing_voltage_seconds:float, reporter:SafeTelegramReporter4Loops=None):
 	"""Perform an IV curve measurement using the high voltage power supply.
 	
 	Arguments
@@ -53,8 +54,7 @@ def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current
 						the_setup.set_bias_voltage(volts=voltage)
 						sleep(time_after_changing_voltage_seconds)
 						for n_measurement in range(n_measurements_per_voltage):
-							if not silent:
-								print(f'Measuring n_voltage={n_voltage}/{len(voltages)-1} n_measurement={n_measurement}/{n_measurements_per_voltage-1}')
+							logging.info(f'Measuring n_voltage={n_voltage}/{len(voltages)-1} n_measurement={n_measurement}/{n_measurements_per_voltage-1}')
 							sleep(time_between_each_measurement_seconds)
 							measured_data_df = pandas.DataFrame(
 								{
@@ -80,8 +80,8 @@ def iv_curve_plot(bureaucrat:RunBureaucrat):
 	with JuanCarlos.handle_task('iv_curve_plot') as JuanCarlos_employee:
 		# Do a plot ---
 		measured_data_df = load_whole_dataframe(JuanCarlos.path_to_directory_of_task('iv_curve_measure')/'measured_data.sqlite').reset_index()
-		mean_measured_data_df = measured_data_df.groupby(by='n_voltage').mean().reset_index()
-		mean_measured_data_df['Bias current std (A)'] = measured_data_df.groupby(by='n_voltage').std()['Bias current (A)']
+		mean_measured_data_df = measured_data_df.groupby(by='n_voltage').mean(numeric_only=True).reset_index()
+		mean_measured_data_df['Bias current std (A)'] = measured_data_df.groupby(by='n_voltage').std(numeric_only=True)['Bias current (A)']
 		mean_measured_data_df['Bias current (A)'] *= -1 # So the logarithmic plot don't fails.
 		mean_measured_data_df['Bias voltage (V)'] *= -1 # So the curve is in the positive quadrant.
 		fig = line(
@@ -106,7 +106,9 @@ if __name__ == '__main__':
 	from TheSetup import connect_me_with_the_setup
 	import os
 	
-	VOLTAGES = np.linspace(0,111,22)
+	set_my_template_as_default()
+	
+	VOLTAGES = np.linspace(0,500,33)
 	
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
 		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + input('Measurement name? ').replace(' ','_'))
@@ -114,7 +116,7 @@ if __name__ == '__main__':
 		iv_curve_measure(
 			bureaucrat = Mariano,
 			voltages = list(VOLTAGES) + list(VOLTAGES)[::-1],
-			current_limit_amperes = 1e-6,
+			current_limit_amperes = 5e-6,
 			n_measurements_per_voltage = 2,
 			time_between_each_measurement_seconds = .1,
 			time_after_changing_voltage_seconds = 1,

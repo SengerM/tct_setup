@@ -1,10 +1,19 @@
 from scan_2D import plot_everything_from_TCT_2D_scan
 from the_bureaucrat.bureaucrats import RunBureaucrat # https://github.com/SengerM/the_bureaucrat
 from pathlib import Path
+import logging
 
 if __name__ == '__main__':
 	import argparse
-	from grafica.plotly_utils.utils import set_my_template_as_default
+	from plotly_utils import set_my_template_as_default
+	import sys
+	
+	logging.basicConfig(
+		stream = sys.stderr, 
+		level = logging.INFO,
+		format = '%(asctime)s|%(levelname)s|%(funcName)s|%(message)s',
+		datefmt = '%Y-%m-%d %H:%M:%S',
+	)
 	
 	set_my_template_as_default()
 	

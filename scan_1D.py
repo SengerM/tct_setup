@@ -16,7 +16,7 @@ from signals.PeakSignal import PeakSignal, draw_in_plotly # https://github.com/S
 import sqlite3
 import logging
 
-def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None):
+def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None, save_waveforms:bool=True):
 	"""Perform a 1D scan with the TCT setup.
 	
 	Arguments
@@ -51,7 +51,7 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 				reporter.report_loop(len(positions), Raúl.run_name) if reporter is not None else nullcontext() as reporter, \
 				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('parsed_from_waveforms.sqlite'), dump_after_n_appends = 7777, dump_after_seconds = 60) as parsed_data_dumper, \
 				SQLiteDataFrameDumper(Raúls_employee.path_to_directory_of_my_task/Path('measured_data.sqlite'), dump_after_n_appends = 1111, dump_after_seconds = 60) as measured_data_dumper, \
-				SQLiteDataFrameDumper(path_to_waveforms_file, dump_after_n_appends = 1111, dump_after_seconds = 60) as waveforms_dumper \
+				SQLiteDataFrameDumper(path_to_waveforms_file, dump_after_n_appends = 1111, dump_after_seconds = 60) if save_waveforms else nullcontext() as waveforms_dumper \
 			:
 				n_waveform = 0
 				for n_position, target_position in enumerate(positions):
@@ -94,7 +94,8 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 								waveform = pandas.DataFrame(raw_data_each_pulse[n_pulse])
 								waveform['n_waveform'] = n_waveform
 								waveform.set_index('n_waveform', inplace=True)
-								waveforms_dumper.append(waveform)
+								if save_waveforms:
+									waveforms_dumper.append(waveform)
 								
 								parsed_from_waveform = parse_waveform(
 									PeakSignal(
@@ -123,7 +124,8 @@ def TCT_1D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_cha
 		logging.info(f'Finished measuring!')
 		
 		logging.info(f'Producing some plots of some of the waveforms...')
-		plot_some_random_waveforms(Raúls_employee, n_waveform, 20)
+		if save_waveforms:
+			plot_some_random_waveforms(Raúls_employee, n_waveform, 20)
 
 def plot_some_random_waveforms(bureaucrat:TaskBureaucrat, total_number_of_waveforms:int, number_of_triggers_to_plot:int=20):
 	if not isinstance(bureaucrat, TaskBureaucrat):
@@ -232,7 +234,7 @@ def plot_parsed_data_from_TCT_1D_scan(bureaucrat:RunBureaucrat, draw_main_plots:
 					include_plotlyjs = 'cdn',
 				)
 
-def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True):
+def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_file:bool=True, save_waveforms:bool=True):
 	"""Perform a several 1D scans with the TCT setup, one at each voltage.
 	
 	Arguments
@@ -272,12 +274,13 @@ def TCT_1D_scan_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volta
 						positions = positions,
 						n_triggers_per_position = n_triggers_per_position,
 						acquire_channels = acquire_channels,
+						save_waveforms = save_waveforms,
 						reporter = TelegramReporter(
 							telegram_token = my_telegram_bots.robobot.token, 
 							telegram_chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 						) if report_progress else None,
 					)
-					if compress_waveforms_file:
+					if compress_waveforms_file and save_waveforms:
 						logging.info(f'Compressing waveforms file...')
 						path_to_waveforms_file = Lorenzos_son.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite'
 						compress_waveforms_sqlite(path_to_waveforms_file)

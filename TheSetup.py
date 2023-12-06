@@ -1,6 +1,6 @@
 import PyticularsTCT # https://github.com/SengerM/PyticularsTCT
 from PyticularsTCT.find_ximc_stages import map_coordinates_to_serial_ports # https://github.com/SengerM/PyticularsTCT
-import TeledyneLeCroyPy # https://github.com/SengerM/TeledyneLeCroyPy
+# ~ import TeledyneLeCroyPy # https://github.com/SengerM/TeledyneLeCroyPy
 from CAENpy.CAENDigitizer import CAEN_DT5742_Digitizer
 from keithley.Keithley2470 import Keithley2470SafeForLGADs # https://github.com/SengerM/keithley
 import time
@@ -34,9 +34,9 @@ class TheTCTSetup:
 		self._tct = PyticularsTCT.TCT(x_stage_port=ports_dict['x'], y_stage_port=ports_dict['y'], z_stage_port=ports_dict['z'])
 		logging.info('TCT connected!')
 		
-		logging.info('Connecting with high voltage power supply...')
-		self._keithley = Keithley2470SafeForLGADs('USB0::1510::9328::04481179::0::INSTR', polarity = 'negative')
-		logging.info('High voltage power supply connected!')
+		# ~ logging.info('Connecting with high voltage power supply...')
+		# ~ self._keithley = Keithley2470SafeForLGADs('USB0::1510::9328::04481179::0::INSTR', polarity = 'negative')
+		# ~ logging.info('High voltage power supply connected!')
 		
 		# ~ list_of_Elektro_Automatik_devices_connected = ElectroAutomatikGmbHPy.find_elektro_automatik_devices()
 		# ~ if len(list_of_Elektro_Automatik_devices_connected) == 1:
@@ -130,7 +130,11 @@ class TheTCTSetup:
 	def measure_bias_voltage(self)->float:
 		"""Returns a measure of the bias voltage."""
 		with self._keithley_Lock:
-			return self._keithley.measure_voltage()
+			if hasattr(self, '_keithley'):
+				return self._keithley.measure_voltage()
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
+				return float('NaN')
 	
 	def set_bias_voltage(self, volts:float):
 		"""Set the bias voltage.
@@ -141,17 +145,28 @@ class TheTCTSetup:
 			The voltage.
 		"""
 		with self._keithley_Lock:
-			self._keithley.set_source_voltage(volts)
-	
+			if hasattr(self, '_keithley'):
+				self._keithley.set_source_voltage(volts)
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
+		
 	def measure_bias_current(self)->float:
 		"""Returns a measure of the bias current."""
 		with self._keithley_Lock:
-			return self._keithley.measure_current()
+			if hasattr(self, '_keithley'):
+				return self._keithley.measure_current()
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
+				return float('NaN')
 	
 	def get_current_compliance(self)->float:
 		"""Returns the current limit of the voltage source in Amperes."""
 		with self._keithley_Lock:
-			return self._keithley.current_limit
+			if hasattr(self, '_keithley'):
+				return self._keithley.current_limit
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
+				return float('NaN')
 	
 	def set_current_compliance(self, amperes:float)->None:
 		"""Set the current compliance in the bias power supply.
@@ -162,12 +177,19 @@ class TheTCTSetup:
 			The value for the current limit.
 		"""
 		with self._keithley_Lock:
-			self._keithley.current_limit = amperes
+			if hasattr(self, '_keithley'):
+				self._keithley.current_limit = amperes
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
 	
 	def get_bias_output_status(self)->str:
 		"""Returns either `'on'` or `'off'`."""
 		with self._keithley_Lock:
-			return self._keithley.output
+			if hasattr(self, '_keithley'):
+				return self._keithley.output
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
+				return None
 	
 	def set_bias_output_status(self, status:str)->None:
 		"""Set the bias output to on or off.
@@ -178,7 +200,10 @@ class TheTCTSetup:
 			Either `'on'` or `'off'`.
 		"""
 		with self._keithley_Lock:
-			self._keithley.output = status
+			if hasattr(self, '_keithley'):
+				self._keithley.output = status
+			else:
+				warnings.warn(f'Cannot find bias voltage source')
 	
 	# Oscilloscope -----------------------------------------------------
 	

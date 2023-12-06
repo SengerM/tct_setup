@@ -9,6 +9,7 @@ from signals.PeakSignal import PeakSignal, compress_PeakSignal_V230507, decompre
 import pickle
 import zipfile
 import logging
+import numpy
 
 def create_a_timestamp():
 	logging.info('Creating a timestamp, sleeping 1 second to ensure no two timestamps are identical...')
@@ -60,6 +61,7 @@ def compress_waveforms_sqlite(path_to_file:Path):
 	path_to_temporary_pickle_file = path_to_file.parent/'compressed_waveforms.pickle'
 	with zipfile.ZipFile(path_to_file.with_suffix('.zip'), 'w', zipfile.ZIP_DEFLATED) as myzip:
 		with open(path_to_temporary_pickle_file, 'a+b') as pickle_file:
+			n_waveforms_processed = 0
 			for idx, row in waveforms_index.iterrows():
 				waveform = pandas.read_sql(
 					sql = f"SELECT * from dataframe_table WHERE " + " AND ".join([f"{name} is {val}" for name,val in zip(waveforms_index.columns, row)]),
@@ -74,7 +76,10 @@ def compress_waveforms_sqlite(path_to_file:Path):
 					obj = compressed_waveform, 
 					file = pickle_file
 				)
-		
+				n_waveforms_processed += 1
+				if n_waveforms_processed%999 == 0:
+					logging.info(f'{n_waveforms_processed} already processed.')
+		logging.info('Compressing further into a .zip file...')
 		myzip.write(path_to_temporary_pickle_file)
 		myzip.write(Path(__file__).resolve(), Path(__file__).parts[-1])
 	path_to_temporary_pickle_file.unlink()
@@ -103,6 +108,8 @@ def decompress_waveforms_into_sqlite(path_to_file:Path):
 					waveform_df['n_waveform'] = n_waveform
 					waveform_df.set_index('n_waveform', inplace=True)
 					sqlite_dumper.append(waveform_df)
+					if n_waveform%99 == 0:
+						logging.info(f'Compressed {n_waveform} waveforms.')
 					n_waveform += 1
 				except EOFError:
 					break

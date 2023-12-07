@@ -186,7 +186,7 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 
 if __name__ == '__main__':
 	import my_telegram_bots
-	from configuration_files.current_run import Alberto
+	from configuration_files.scans_configs import Alberto, CONFIG_2D_SCAN, CURRENT_COMPLIANCE_AMPERES
 	from utils import create_a_timestamp
 	from TheSetup import connect_me_with_the_setup
 	import os
@@ -199,27 +199,6 @@ if __name__ == '__main__':
 		format = '%(asctime)s|%(levelname)s|%(funcName)s|%(message)s',
 		datefmt = '%Y-%m-%d %H:%M:%S',
 	)
-	
-	#######################################################
-	
-	X_SPAN = 2000e-6
-	Y_SPAN = 2000e-6
-	X_STEP = 111e-6
-	Y_STEP = X_STEP
-	DEVICE_NAME = 'BNL_TESTING'
-	DEVICE_CENTER = (-3401e-6,236e-6,72009e-6)
-	ROTATION_ANGLE_DEG = 45
-	VOLTAGES = [111]
-	LASER_DAC = 0
-	N_TRIGGERS_PER_POSITION = 10
-	CURRENT_COMPLIANCE_AMPERES = 100e-6
-	REMOVE_PADS = None#dict(
-		# ~ pitch = 500e-6,
-		# ~ size = 200e-6,
-		# ~ shape = 'square',
-	# ~ )
-	
-	#######################################################
 	
 	set_my_template_as_default()
 	
@@ -261,9 +240,9 @@ if __name__ == '__main__':
 	
 	if is_preview:
 		logging.info('Preview mode enabled!')
-		X_STEP = X_SPAN/8
-		Y_STEP = Y_SPAN/8
-		VOLTAGES = [VOLTAGES[0]]
+		CONFIG_2D_SCAN['X_STEP'] = CONFIG_2D_SCAN['X_SPAN']/8
+		CONFIG_2D_SCAN['Y_STEP'] = CONFIG_2D_SCAN['Y_SPAN']/8
+		CONFIG_2D_SCAN['VOLTAGES'] = [CONFIG_2D_SCAN['VOLTAGES'][0]]
 	
 	the_setup = connect_me_with_the_setup(who=f'scan_2D.py PID:{os.getpid()}')
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
@@ -271,12 +250,12 @@ if __name__ == '__main__':
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			logging.info('Hardware control acquired!')
 			try:
-				Mariano = employee.create_subrun(create_a_timestamp() + '_' + DEVICE_NAME + ('_preview' if is_preview else '') + f'_Step{X_STEP*1e6:.0f}um' + f'_n_trigs{N_TRIGGERS_PER_POSITION}')
+				Mariano = employee.create_subrun(create_a_timestamp() + '_' + CONFIG_2D_SCAN['DEVICE_NAME'] + ('_preview' if is_preview else '') + f'_Step{CONFIG_2D_SCAN["X_STEP"]*1e6:.0f}um' + f'_n_trigs{CONFIG_2D_SCAN["N_TRIGGERS_PER_POSITION"]}')
 				
 				logging.info('Turning laser on and ramping high voltage up...')
 				the_setup.set_current_compliance(amperes=CURRENT_COMPLIANCE_AMPERES)
 				the_setup.set_bias_output_status('on')
-				the_setup.set_laser_DAC(LASER_DAC)
+				the_setup.set_laser_DAC(CONFIG_2D_SCAN['LASER_DAC'])
 				the_setup.set_laser_frequency(1000)
 				the_setup.set_laser_status('on')
 				logging.info('Laser and high voltage are on!')
@@ -284,24 +263,24 @@ if __name__ == '__main__':
 				TCT_2D_scans_sweeping_bias_voltage(
 					bureaucrat = Mariano,
 					the_setup = the_setup,
-					voltages = VOLTAGES,
+					voltages = CONFIG_2D_SCAN['VOLTAGES'],
 					positions = create_list_of_positions(
-						device_center_xyz = DEVICE_CENTER,
-						x_span = X_SPAN,
-						y_span = Y_SPAN,
-						x_step = X_STEP,
-						y_step = Y_STEP,
-						readout_pads_to_remove = REMOVE_PADS,
-						rotation_angle_deg = ROTATION_ANGLE_DEG,
+						device_center_xyz = CONFIG_2D_SCAN['DEVICE_CENTER'],
+						x_span = CONFIG_2D_SCAN['X_SPAN'],
+						y_span = CONFIG_2D_SCAN['Y_SPAN'],
+						x_step = CONFIG_2D_SCAN['X_STEP'],
+						y_step = CONFIG_2D_SCAN['Y_STEP'],
+						readout_pads_to_remove = CONFIG_2D_SCAN['REMOVE_PADS'],
+						rotation_angle_deg = CONFIG_2D_SCAN['ROTATION_ANGLE_DEG'],
 					),
 					acquire_channels = list(range(16)),
-					n_triggers_per_position = N_TRIGGERS_PER_POSITION,
+					n_triggers_per_position = CONFIG_2D_SCAN['N_TRIGGERS_PER_POSITION'],
 					reporter = SafeTelegramReporter4Loops(
 						bot_token = my_telegram_bots.robobot.token, 
 						chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
 					),
-					compress_waveforms_files = True,
-					save_waveforms = False,
+					compress_waveforms_files = CONFIG_2D_SCAN['COMPRESS_WAVEFORMS_FILE'],
+					save_waveforms = CONFIG_2D_SCAN['SAVE_WAVEFORMS'],
 				)
 			finally:
 				logging.info('Finalizing scan...')

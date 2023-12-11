@@ -31,9 +31,6 @@ def iv_curve_measure(bureaucrat:RunBureaucrat, the_setup, voltages:list, current
 	time_after_changing_voltage_seconds: float
 		Number of seconds to wait after a new voltage has been applied 
 		before start to taking data.
-	silent: bool, default True
-		If `True`, not messages will be printed. If `False`, messages will
-		be printed showing the progress of the measurement.
 	reporter: SafeTelegramReporter4Loops
 		A reporter to report the progress of the script. Optional.
 	"""
@@ -82,8 +79,8 @@ def iv_curve_plot(bureaucrat:RunBureaucrat):
 		measured_data_df = load_whole_dataframe(JuanCarlos.path_to_directory_of_task('iv_curve_measure')/'measured_data.sqlite').reset_index()
 		mean_measured_data_df = measured_data_df.groupby(by='n_voltage').mean(numeric_only=True).reset_index()
 		mean_measured_data_df['Bias current std (A)'] = measured_data_df.groupby(by='n_voltage').std(numeric_only=True)['Bias current (A)']
-		mean_measured_data_df['Bias current (A)'] *= -1 # So the logarithmic plot don't fails.
-		mean_measured_data_df['Bias voltage (V)'] *= -1 # So the curve is in the positive quadrant.
+		mean_measured_data_df['Bias current (A)'] = mean_measured_data_df['Bias current (A)'].abs() # So the logarithmic plot don't fails.
+		mean_measured_data_df['Bias voltage (V)'] = mean_measured_data_df['Bias voltage (V)'].abs() # So the curve is in the positive quadrant.
 		fig = line(
 			data_frame = mean_measured_data_df.reset_index(),
 			x = 'Bias voltage (V)',
@@ -101,14 +98,22 @@ def iv_curve_plot(bureaucrat:RunBureaucrat):
 if __name__ == '__main__':
 	import numpy as np
 	import my_telegram_bots
-	from configuration_files.current_run import Alberto
+	from configuration_files.scans_configs import Alberto
 	from utils import create_a_timestamp
 	from TheSetup import connect_me_with_the_setup
 	import os
+	import sys
+	
+	logging.basicConfig(
+		stream = sys.stderr, 
+		level = logging.INFO,
+		format = '%(asctime)s|%(levelname)s|%(funcName)s|%(message)s',
+		datefmt = '%Y-%m-%d %H:%M:%S',
+	)
 	
 	set_my_template_as_default()
 	
-	VOLTAGES = np.linspace(0,500,33)
+	VOLTAGES = np.linspace(0,222,33)
 	
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
 		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + input('Measurement name? ').replace(' ','_'))
@@ -121,7 +126,6 @@ if __name__ == '__main__':
 			time_between_each_measurement_seconds = .1,
 			time_after_changing_voltage_seconds = 1,
 			the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}'),
-			silent = False,
 			reporter = SafeTelegramReporter4Loops(
 				bot_token = my_telegram_bots.robobot.token, 
 				chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],

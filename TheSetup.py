@@ -1,7 +1,8 @@
 import PyticularsTCT # https://github.com/SengerM/PyticularsTCT
 from PyticularsTCT.find_ximc_stages import map_coordinates_to_serial_ports # https://github.com/SengerM/PyticularsTCT
 # ~ import TeledyneLeCroyPy # https://github.com/SengerM/TeledyneLeCroyPy
-from CAENpy.CAENDigitizer import CAEN_DT5742_Digitizer
+from CAENpy.CAENDigitizer import CAEN_DT5742_Digitizer # https://github.com/SengerM/CAENpy
+from CAENpy.CAENDesktopHighVoltagePowerSupply import CAENDesktopHighVoltagePowerSupply, OneCAENChannel # https://github.com/SengerM/CAENpy
 from keithley.Keithley2470 import Keithley2470SafeForLGADs # https://github.com/SengerM/keithley
 import time
 import warnings
@@ -16,14 +17,17 @@ import logging
 
 class TheTCTSetup:
 	def __init__(self):
+		# LeCroy oscilloscope ---
 		# ~ logging.info('Connecting with oscilloscope...')
 		# ~ self._LeCroy = TeledyneLeCroyPy.LeCroyWaveRunner('TCPIP::130.60.165.228::INSTR')
 		# ~ logging.info(f'Connected with oscilloscope: {self._LeCroy.idn}')
 		
+		# CAEN digitizer ---
 		logging.info('Connecting with CAEN digitizer...')
 		self._CAEN_digitizer = CAEN_DT5742_Digitizer(0)
 		logging.info(f'Connected with CAEN digitizer {repr(self._CAEN_digitizer.idn)}!')
 		
+		# TCT ---
 		logging.info('Connecting with TCT...')
 		stages_coordinates = {
 			'00003A48': 'x',
@@ -34,16 +38,25 @@ class TheTCTSetup:
 		self._tct = PyticularsTCT.TCT(x_stage_port=ports_dict['x'], y_stage_port=ports_dict['y'], z_stage_port=ports_dict['z'])
 		logging.info('TCT connected!')
 		
+		# Keithley high voltage power supply ---
 		# ~ logging.info('Connecting with high voltage power supply...')
 		# ~ self._keithley = Keithley2470SafeForLGADs('USB0::1510::9328::04481179::0::INSTR', polarity = 'negative')
 		# ~ logging.info('High voltage power supply connected!')
 		
+		# CAEN high voltage power supply ---
+		logging.info(f'Connecting with CAEN high voltage power supply...')
+		caen_power_supply = CAENDesktopHighVoltagePowerSupply(port='/dev/ttyACM3')
+		self._caen_high_voltage = OneCAENChannel(caen=caen_power_supply, channel_number=0)
+		logging.info(f'Connected with {repr(self._caen_high_voltage.idn)}')
+		
+		# DC voltage for Peltier cells ---
 		# ~ list_of_Elektro_Automatik_devices_connected = ElectroAutomatikGmbHPy.find_elektro_automatik_devices()
 		# ~ if len(list_of_Elektro_Automatik_devices_connected) == 1:
 			# ~ self._peltier_DC_power_supply = ElectroAutomatikGmbHPowerSupply(list_of_Elektro_Automatik_devices_connected[0]['port'])
 		# ~ else:
 			# ~ raise RuntimeError(f'Cannot autodetect the Elektro-Automatik power source because eiter it is not connected to the computer or there is more than one Elektro-Automatik device connected.')
 		
+		# Temperature + humidity sensor ---
 		logging.info('Connecting with Sensirion...')
 		self._sensirion_sensor = EasySensirion.SensirionSensor()
 		logging.info('Sensirion connected!')
@@ -132,6 +145,8 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				return self._keithley.measure_voltage()
+			elif hasattr(self, '_caen_high_voltage'):
+				return self._caen_high_voltage.V_mon
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 				return float('NaN')
@@ -147,6 +162,8 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				self._keithley.set_source_voltage(volts)
+			elif hasattr(self, '_caen_high_voltage'):
+				self._caen_high_voltage.ramp_voltage(voltage=volts, timeout=66) # For some reason here it needs more than the default time to work...
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 		
@@ -155,6 +172,8 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				return self._keithley.measure_current()
+			elif hasattr(self, '_caen_high_voltage'):
+				return self._caen_high_voltage.I_mon
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 				return float('NaN')
@@ -164,6 +183,8 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				return self._keithley.current_limit
+			elif hasattr(self, '_caen_high_voltage'):
+				return self._caen_high_voltage.current_compliance
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 				return float('NaN')
@@ -179,6 +200,8 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				self._keithley.current_limit = amperes
+			elif hasattr(self, '_caen_high_voltage'):
+				self._caen_high_voltage.current_compliance = amperes
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 	
@@ -187,6 +210,8 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				return self._keithley.output
+			elif hasattr(self, '_caen_high_voltage'):
+				return self._caen_high_voltage.output
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 				return None
@@ -202,6 +227,9 @@ class TheTCTSetup:
 		with self._keithley_Lock:
 			if hasattr(self, '_keithley'):
 				self._keithley.output = status
+			elif hasattr(self, '_caen_high_voltage'):
+				self._caen_high_voltage.output = status
+				time.sleep(1)
 			else:
 				warnings.warn(f'Cannot find bias voltage source')
 	

@@ -29,6 +29,7 @@ def z_scan_to_find_focus(bureaucrat:RunBureaucrat, scan_center:tuple, z_length:f
 			),
 			acquire_channels = list(range(16)),
 			n_triggers_per_position = 11,
+			save_waveforms = False,
 		)
 		plot_parsed_data_from_TCT_1D_scan(bureaucrat = subrun)
 		(subrun.path_to_directory_of_task('TCT_1D_scan')/'waveforms.sqlite').unlink() # Remove useless and heavy waveforms file.
@@ -68,7 +69,7 @@ def plot_z_scan_to_find_focus(bureaucrat:RunBureaucrat):
 
 if __name__ == '__main__':
 	import my_telegram_bots
-	from configuration_files.current_run import Alberto
+	from configuration_files.scans_configs import Alberto, CONFIG_Z_SCAN_TO_FIND_FOCUS, CURRENT_COMPLIANCE_AMPERES
 	from utils import create_a_timestamp
 	from TheSetup import connect_me_with_the_setup
 	import os
@@ -82,21 +83,6 @@ if __name__ == '__main__':
 		datefmt = '%Y-%m-%d %H:%M:%S',
 	)
 	
-	
-	plot_z_scan_to_find_focus(RunBureaucrat(Path('/home/tct/power_storage/senger_matias/TCT_data/CNM_AC-LGAD/TCT_scans/subruns/20230816111533_CNM_AC-LGAD_testing_CAEN_z_scan_to_find_focus')))
-	# ~ plot_parsed_data_from_TCT_1D_scan(RunBureaucrat(Path('/home/tct/power_storage/senger_matias/TCT_data/CNM_AC-LGAD/TCT_scans/subruns/20230816111533_CNM_AC-LGAD_testing_CAEN_z_scan_to_find_focus/z_scan_to_find_focus/subruns/20230816111533_CNM_AC-LGAD_testing_CAEN_z_scan_to_find_focus_TCT_1D_scan')))
-	
-	a
-	
-	####################################################################
-	VOLTAGE = 111
-	SCAN_CENTER = (-3817e-6,1914e-6+200e-6,75019e-6)
-	Z_LENGTH = 11e-3
-	Z_STEP = .2e-3
-	LASER_DAC = 111
-	CURRENT_COMPLIANCE_AMPERES = 11e-6
-	####################################################################
-	
 	set_my_template_as_default()
 	
 	the_setup = connect_me_with_the_setup(who=f'z_scan_to_find_focus.py PID:{os.getpid()}')
@@ -104,22 +90,22 @@ if __name__ == '__main__':
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:
 		with the_setup.hold_control_of_bias(), the_setup.hold_tct_control():
 			try:
-				Mariano = employee.create_subrun(create_a_timestamp() + '_' + f'{input("Device name? ")}_z_scan_to_find_focus')
+				Mariano = employee.create_subrun(create_a_timestamp() + '_' + f'{CONFIG_Z_SCAN_TO_FIND_FOCUS["DEVICE_NAME"]}_z_scan_to_find_focus')
 				
 				the_setup.set_current_compliance(amperes=CURRENT_COMPLIANCE_AMPERES)
 				the_setup.set_bias_output_status('on')
-				the_setup.set_laser_DAC(LASER_DAC)
+				the_setup.set_laser_DAC(CONFIG_Z_SCAN_TO_FIND_FOCUS['LASER_DAC'])
 				the_setup.set_laser_frequency(1000)
 				the_setup.set_laser_status('on')
-				logging.info(f'Setting bias voltage to {VOLTAGE} V...')
-				the_setup.set_bias_voltage(volts=VOLTAGE)
+				logging.info(f'Setting bias voltage to {CONFIG_Z_SCAN_TO_FIND_FOCUS["VOLTAGE"]} V...')
+				the_setup.set_bias_voltage(volts=CONFIG_Z_SCAN_TO_FIND_FOCUS['VOLTAGE'])
 				
 				z_scan_to_find_focus(
 					bureaucrat = Mariano,
 					the_setup = the_setup,
-					scan_center = SCAN_CENTER,
-					z_length = Z_LENGTH,
-					z_step = Z_STEP,
+					scan_center = CONFIG_Z_SCAN_TO_FIND_FOCUS['SCAN_CENTER'],
+					z_length = CONFIG_Z_SCAN_TO_FIND_FOCUS['Z_LENGTH'],
+					z_step = CONFIG_Z_SCAN_TO_FIND_FOCUS['Z_STEP'],
 				)
 				plot_z_scan_to_find_focus(Mariano)
 			finally:	

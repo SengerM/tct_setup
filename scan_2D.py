@@ -84,9 +84,10 @@ def compress_waveforms_file_in_2D_scan(bureaucrat:RunBureaucrat):
 	logging.info(f'Finished compressing waveforms file in "{path_to_waveforms_file}". ')
 	path_to_waveforms_file.unlink()
 
-def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat):
+def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False):
 	"""Produce a set of general plots to explore the results from a 2D scan."""
-	bureaucrat.check_these_tasks_were_run_successfully('TCT_2D_scan')
+	if skip_check == False:
+		bureaucrat.check_these_tasks_were_run_successfully('TCT_2D_scan')
 	
 	with bureaucrat.handle_task('plot_everything_from_TCT_2D_scan') as employee:
 		if len(bureaucrat.list_subruns_of_task('TCT_2D_scan')) != 1:
@@ -164,18 +165,22 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 				the_setup.set_bias_voltage(volts=voltage)
 				
 				b = employee.create_subrun(f'{bureaucrat.run_name}_{int(voltage)}V')
-				TCT_2D_scan(
-					bureaucrat = b,
-					the_setup = the_setup,
-					positions = positions,
-					acquire_channels = acquire_channels,
-					n_triggers_per_position = n_triggers_per_position,
-					reporter = reporter.create_subloop_reporter() if reporter is not None else None,
-					save_waveforms = save_waveforms,
-				)
-				
-				logging.info(f'Producing plots for {b.run_name}...')
-				plot_everything_from_TCT_2D_scan(b)
+				try:
+					TCT_2D_scan(
+						bureaucrat = b,
+						the_setup = the_setup,
+						positions = positions,
+						acquire_channels = acquire_channels,
+						n_triggers_per_position = n_triggers_per_position,
+						reporter = reporter.create_subloop_reporter() if reporter is not None else None,
+						save_waveforms = save_waveforms,
+					)
+				except Exception as e:
+					raise e
+				finally:
+					# Always plot whatever was measured, it should not take so long...
+					logging.info(f'Producing plots for {b.run_name}...')
+					plot_everything_from_TCT_2D_scan(b, skip_check=True)
 				
 				if compress_waveforms_files and save_waveforms:
 					logging.info(f'Compressing waveforms file...')
@@ -243,6 +248,7 @@ if __name__ == '__main__':
 		CONFIG_2D_SCAN['X_STEP'] = CONFIG_2D_SCAN['X_SPAN']/8
 		CONFIG_2D_SCAN['Y_STEP'] = CONFIG_2D_SCAN['Y_SPAN']/8
 		CONFIG_2D_SCAN['VOLTAGES'] = [CONFIG_2D_SCAN['VOLTAGES'][0]]
+		CONFIG_2D_SCAN['N_TRIGGERS_PER_POSITION'] = 5
 	
 	the_setup = connect_me_with_the_setup(who=f'scan_2D.py PID:{os.getpid()}')
 	with Alberto.handle_task('TCT_scans', drop_old_data=False) as employee:

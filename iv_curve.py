@@ -98,7 +98,7 @@ def iv_curve_plot(bureaucrat:RunBureaucrat):
 if __name__ == '__main__':
 	import numpy as np
 	import my_telegram_bots
-	from configuration_files.scans_configs import Alberto
+	from configuration_files.scans_configs import Alberto, CONFIG_IV_CURVE, CURRENT_DUT_NAME
 	from utils import create_a_timestamp
 	from TheSetup import connect_me_with_the_setup
 	import os
@@ -113,15 +113,13 @@ if __name__ == '__main__':
 	
 	set_my_template_as_default()
 	
-	VOLTAGES = np.linspace(0,222,33)
-	
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
-		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + input('Measurement name? ').replace(' ','_'))
+		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + CURRENT_DUT_NAME.replace(' ','_'))
 		
 		iv_curve_measure(
 			bureaucrat = Mariano,
-			voltages = list(VOLTAGES) + list(VOLTAGES)[::-1],
-			current_limit_amperes = 5e-6,
+			voltages = list(CONFIG_IV_CURVE['VOLTAGES']) + list(CONFIG_IV_CURVE['VOLTAGES'])[::-1],
+			current_limit_amperes = CONFIG_IV_CURVE['CURRENT_COMPLIANCE_AMPERES'],
 			n_measurements_per_voltage = 2,
 			time_between_each_measurement_seconds = .1,
 			time_after_changing_voltage_seconds = 1,

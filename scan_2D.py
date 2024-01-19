@@ -105,6 +105,9 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 		path_for_nx_ny_plots = employee.path_to_directory_of_my_task/'nx_ny'
 		path_for_nx_ny_plots.mkdir()
 		
+		path_for_scatter_plots = employee.path_to_directory_of_my_task/'xy'
+		path_for_scatter_plots.mkdir()
+		
 		logging.info('Reading index data...')
 		data_index = pandas.read_sql(
 			f'SELECT n_position,n_channel,n_pulse FROM dataframe_table WHERE n_pulse==1',
@@ -128,7 +131,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 			averages.set_index(['n_y','n_x','n_channel'], inplace=True)
 			data_to_plot_xarray = averages[col].to_xarray()
 			fig = px.imshow(
-				title = f'{col}<br><sup>{bureaucrat.run_name}</sup>',
+				title = f'{col} vs n_x,n_y<br><sup>{bureaucrat.run_name}</sup>',
 				img = data_to_plot_xarray,
 				aspect = 'equal',
 				facet_col = 'n_channel',
@@ -140,6 +143,26 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 				path_for_nx_ny_plots/f'{col}_nx_ny.html',
 				include_plotlyjs = 'cdn',
 			)
+			
+			fig = px.scatter(
+				data_frame = averages.reset_index(),
+				title = f'{col} vs x,y<br><sup>{bureaucrat.run_name}</sup>',
+				x = 'x (m)',
+				y = 'y (m)',
+				color = col,
+				facet_col = 'n_channel',
+				hover_data = ['n_position','n_x','n_y'],
+			)
+			fig.update_coloraxes(colorbar_title_side='right')
+			fig.update_yaxes(
+				scaleanchor = "x",
+				scaleratio = 1,
+			)
+			fig.write_html(
+				path_for_scatter_plots/f'{col}.html',
+				include_plotlyjs = 'cdn',
+			)
+			
 			if col in {'Amplitude (V)','Collected charge (V s)'}:
 				fig = px.imshow(
 					title = f'sum({col})<br><sup>{bureaucrat.run_name}</sup>',
@@ -150,6 +173,24 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 				fig.update_coloraxes(colorbar_title_side='right')
 				fig.write_html(
 					path_for_nx_ny_plots/f'sum({col})_nx_ny.html',
+					include_plotlyjs = 'cdn',
+				)
+				
+				fig = px.scatter(
+					data_frame = averages.groupby(['n_y','n_x','x (m)','y (m)','n_position']).sum().reset_index(),
+					title = f'sum({col}) vs x,y<br><sup>{bureaucrat.run_name}</sup>',
+					x = 'x (m)',
+					y = 'y (m)',
+					color = col,
+					hover_data = ['n_position','n_x','n_y'],
+				)
+				fig.update_coloraxes(colorbar_title_side='right')
+				fig.update_yaxes(
+					scaleanchor = "x",
+					scaleratio = 1,
+				)
+				fig.write_html(
+					path_for_scatter_plots/f'sum({col}).html',
 					include_plotlyjs = 'cdn',
 				)
 		

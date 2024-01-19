@@ -129,39 +129,36 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 			logging.info('Producing plots as function of n_x,n_y...')
 			averages.reset_index(inplace=True, drop=False)
 			averages.set_index(['n_y','n_x','n_channel'], inplace=True)
-			data_to_plot_xarray = averages[col].to_xarray()
-			fig = px.imshow(
-				title = f'{col} vs n_x,n_y<br><sup>{bureaucrat.run_name}</sup>',
-				img = data_to_plot_xarray,
-				aspect = 'equal',
-				facet_col = 'n_channel',
-				width = 555*len(data_to_plot_xarray.coords['n_channel']),
-				origin = 'lower',
-			)
-			fig.update_coloraxes(colorbar_title_side='right')
-			fig.write_html(
-				path_for_nx_ny_plots/f'{col}_nx_ny.html',
-				include_plotlyjs = 'cdn',
-			)
-			
-			fig = px.scatter(
-				data_frame = averages.reset_index(),
-				title = f'{col} vs x,y<br><sup>{bureaucrat.run_name}</sup>',
-				x = 'x (m)',
-				y = 'y (m)',
-				color = col,
-				facet_col = 'n_channel',
-				hover_data = ['n_position','n_x','n_y'],
-			)
-			fig.update_coloraxes(colorbar_title_side='right')
-			fig.update_yaxes(
-				scaleanchor = "x",
-				scaleratio = 1,
-			)
-			fig.write_html(
-				path_for_scatter_plots/f'{col}.html',
-				include_plotlyjs = 'cdn',
-			)
+			for n_channel in data.reset_index('n_channel')['n_channel'].drop_duplicates():
+				fig = px.imshow(
+					title = f'{col} vs n_x,n_y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
+					img = averages.query(f'n_channel=={n_channel}').reset_index(drop=False).set_index(['n_x','n_y']).unstack('n_x')[col],
+					aspect = 'equal',
+					origin = 'lower',
+				)
+				fig.update_coloraxes(colorbar_title_side='right', colorbar_title=col)
+				fig.write_html(
+					path_for_nx_ny_plots/f'{col}_n_channel_{n_channel}.html',
+					include_plotlyjs = 'cdn',
+				)
+				
+				fig = px.scatter(
+					data_frame = averages.query(f'n_channel=={n_channel}').reset_index(),
+					title = f'{col} vs x,y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
+					x = 'x (m)',
+					y = 'y (m)',
+					color = col,
+					hover_data = ['n_position','n_x','n_y'],
+				)
+				fig.update_coloraxes(colorbar_title_side='right')
+				fig.update_yaxes(
+					scaleanchor = "x",
+					scaleratio = 1,
+				)
+				fig.write_html(
+					path_for_scatter_plots/f'{col}_n_channel_{n_channel}.html',
+					include_plotlyjs = 'cdn',
+				)
 			
 			if col in {'Amplitude (V)','Collected charge (V s)'}:
 				fig = px.imshow(

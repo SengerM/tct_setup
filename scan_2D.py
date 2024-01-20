@@ -13,6 +13,7 @@ from multiprocessing import Process
 from plotly_utils import scatter_histogram
 import plotly.graph_objects as go
 import logging
+import dominate # https://github.com/Knio/dominate
 
 def TCT_2D_scan(bureaucrat:RunBureaucrat, the_setup, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None, save_waveforms:bool=True):
 	"""Perform a 2D scan with the TCT setup.
@@ -100,14 +101,6 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 		for _ in {'x','y'}: # Remove offset so (0,0) is the center...
 			positions_data[f'{_} (m)'] -= positions_data[f'{_} (m)'].mean()
 		
-		# ~ utils.create_parallel_xy_grid_from_tilted_xy_grid(positions_data)
-		
-		path_for_nx_ny_plots = employee.path_to_directory_of_my_task/'nx_ny'
-		path_for_nx_ny_plots.mkdir()
-		
-		path_for_scatter_plots = employee.path_to_directory_of_my_task/'xy'
-		path_for_scatter_plots.mkdir()
-		
 		logging.info('Reading index data...')
 		data_index = pandas.read_sql(
 			f'SELECT n_position,n_channel,n_pulse FROM dataframe_table WHERE n_pulse==1',
@@ -115,6 +108,12 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 		).set_index(['n_position','n_channel','n_pulse']).index
 		
 		for col in {'Amplitude (V)','t_50 (s)','Collected charge (V s)'}:
+			path_for_nx_ny_plots = employee.path_to_directory_of_my_task/col/'plots_nx_ny'
+			path_for_nx_ny_plots.mkdir(parents=True)
+			
+			path_for_scatter_plots = employee.path_to_directory_of_my_task/col/'plots_xy'
+			path_for_scatter_plots.mkdir(parents=True)
+			
 			logging.info(f'Reading data for {repr(col)}...')
 			data = pandas.read_sql(
 				f'SELECT `{col}` FROM dataframe_table WHERE n_pulse==1',
@@ -125,8 +124,12 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 			averages = data.groupby(['n_position','n_channel']).agg(numpy.nanmedian)
 			averages = averages.merge(positions_data, left_index=True, right_index=True)
 			
-			# Plot as function of nx,ny:
-			logging.info('Producing plots as function of n_x,n_y...')
+			# Do plots:
+			logging.info(f'Plotting {repr(col)}...')
+			
+			nxny_plots_doc = dominate.document(title=f'{col} vs n_x,n_y')
+			xy_plots_doc = dominate.document(title=f'{col} vs x,y')
+			
 			averages.reset_index(inplace=True, drop=False)
 			averages.set_index(['n_y','n_x','n_channel'], inplace=True)
 			for n_channel in data.reset_index('n_channel')['n_channel'].drop_duplicates():
@@ -141,6 +144,11 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 					path_for_nx_ny_plots/f'{col}_n_channel_{n_channel}.html',
 					include_plotlyjs = 'cdn',
 				)
+				with nxny_plots_doc:
+					dominate.tags.iframe(
+						src = f'{col}_n_channel_{n_channel}.html',
+						style = 'width: 100%; height: 88vh; border: 0;',
+					)
 				
 				fig = px.scatter(
 					data_frame = averages.query(f'n_channel=={n_channel}').reset_index(),
@@ -159,6 +167,11 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 					path_for_scatter_plots/f'{col}_n_channel_{n_channel}.html',
 					include_plotlyjs = 'cdn',
 				)
+				with xy_plots_doc:
+					dominate.tags.iframe(
+						src = f'{col}_n_channel_{n_channel}.html',
+						style = 'width: 100%; height: 88vh; border: 0;',
+					)
 			
 			if col in {'Amplitude (V)','Collected charge (V s)'}:
 				fig = px.imshow(
@@ -172,6 +185,11 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 					path_for_nx_ny_plots/f'sum({col})_nx_ny.html',
 					include_plotlyjs = 'cdn',
 				)
+				with nxny_plots_doc:
+					dominate.tags.iframe(
+						src = f'sum({col})_nx_ny.html',
+						style = 'width: 100%; height: 88vh; border: 0;',
+					)
 				
 				fig = px.scatter(
 					data_frame = averages.groupby(['n_y','n_x','x (m)','y (m)','n_position']).sum().reset_index(),
@@ -190,7 +208,17 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 					path_for_scatter_plots/f'sum({col}).html',
 					include_plotlyjs = 'cdn',
 				)
-		
+				with xy_plots_doc:
+					dominate.tags.iframe(
+						src = f'sum({col}).html',
+						style = 'width: 100%; height: 88vh; border: 0;',
+					)
+			
+			with open(path_for_nx_ny_plots/'all_together.html','w') as ofile:
+				print(nxny_plots_doc, file=ofile)
+			with open(path_for_scatter_plots/'all_together.html','w') as ofile:
+				print(xy_plots_doc, file=ofile)
+			
 	logging.info('Finished plotting 2D scan!')
 
 def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, voltages:list, positions:list, acquire_channels:list, n_triggers_per_position:int=1, reporter:SafeTelegramReporter4Loops=None, compress_waveforms_files:bool=True, save_waveforms:bool=True):

@@ -132,46 +132,6 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 			
 			averages.reset_index(inplace=True, drop=False)
 			averages.set_index(['n_y','n_x','n_channel'], inplace=True)
-			for n_channel in data.reset_index('n_channel')['n_channel'].drop_duplicates():
-				fig = px.imshow(
-					title = f'{col} vs n_x,n_y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
-					img = averages.query(f'n_channel=={n_channel}').reset_index(drop=False).set_index(['n_x','n_y']).unstack('n_x')[col],
-					aspect = 'equal',
-					origin = 'lower',
-				)
-				fig.update_coloraxes(colorbar_title_side='right', colorbar_title=col)
-				fig.write_html(
-					path_for_nx_ny_plots/f'{col}_n_channel_{n_channel}.html',
-					include_plotlyjs = 'cdn',
-				)
-				with nxny_plots_doc:
-					dominate.tags.iframe(
-						src = f'{col}_n_channel_{n_channel}.html',
-						style = 'width: 100%; height: 88vh; border: 0;',
-					)
-				
-				fig = px.scatter(
-					data_frame = averages.query(f'n_channel=={n_channel}').reset_index(),
-					title = f'{col} vs x,y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
-					x = 'x (m)',
-					y = 'y (m)',
-					color = col,
-					hover_data = ['n_position','n_x','n_y'],
-				)
-				fig.update_coloraxes(colorbar_title_side='right')
-				fig.update_yaxes(
-					scaleanchor = "x",
-					scaleratio = 1,
-				)
-				fig.write_html(
-					path_for_scatter_plots/f'{col}_n_channel_{n_channel}.html',
-					include_plotlyjs = 'cdn',
-				)
-				with xy_plots_doc:
-					dominate.tags.iframe(
-						src = f'{col}_n_channel_{n_channel}.html',
-						style = 'width: 100%; height: 88vh; border: 0;',
-					)
 			
 			if col in {'Amplitude (V)','Collected charge (V s)'}:
 				fig = px.imshow(
@@ -211,6 +171,47 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 				with xy_plots_doc:
 					dominate.tags.iframe(
 						src = f'sum({col}).html',
+						style = 'width: 100%; height: 88vh; border: 0;',
+					)
+			
+			for n_channel in data.reset_index('n_channel')['n_channel'].drop_duplicates():
+				fig = px.imshow(
+					title = f'{col} vs n_x,n_y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
+					img = averages.query(f'n_channel=={n_channel}').reset_index(drop=False).set_index(['n_x','n_y']).unstack('n_x')[col],
+					aspect = 'equal',
+					origin = 'lower',
+				)
+				fig.update_coloraxes(colorbar_title_side='right', colorbar_title=col)
+				fig.write_html(
+					path_for_nx_ny_plots/f'{col}_n_channel_{n_channel}.html',
+					include_plotlyjs = 'cdn',
+				)
+				with nxny_plots_doc:
+					dominate.tags.iframe(
+						src = f'{col}_n_channel_{n_channel}.html',
+						style = 'width: 100%; height: 88vh; border: 0;',
+					)
+				
+				fig = px.scatter(
+					data_frame = averages.query(f'n_channel=={n_channel}').reset_index(),
+					title = f'{col} vs x,y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
+					x = 'x (m)',
+					y = 'y (m)',
+					color = col,
+					hover_data = ['n_position','n_x','n_y'],
+				)
+				fig.update_coloraxes(colorbar_title_side='right')
+				fig.update_yaxes(
+					scaleanchor = "x",
+					scaleratio = 1,
+				)
+				fig.write_html(
+					path_for_scatter_plots/f'{col}_n_channel_{n_channel}.html',
+					include_plotlyjs = 'cdn',
+				)
+				with xy_plots_doc:
+					dominate.tags.iframe(
+						src = f'{col}_n_channel_{n_channel}.html',
 						style = 'width: 100%; height: 88vh; border: 0;',
 					)
 			

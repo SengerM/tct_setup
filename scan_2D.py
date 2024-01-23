@@ -98,8 +98,6 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 		logging.info('Reading positions data...')
 		positions_data = pandas.read_pickle(bureaucrat.path_to_directory_of_task('TCT_2D_scan')/'positions.pickle')
 		positions_data.reset_index(['n_x','n_y'], drop=False, inplace=True)
-		for _ in {'x','y'}: # Remove offset so (0,0) is the center...
-			positions_data[f'{_} (m)'] -= positions_data[f'{_} (m)'].mean()
 		
 		logging.info('Reading index data...')
 		data_index = pandas.read_sql(
@@ -127,15 +125,15 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 			# Do plots:
 			logging.info(f'Plotting {repr(col)}...')
 			
-			nxny_plots_doc = dominate.document(title=f'{col} vs n_x,n_y')
-			xy_plots_doc = dominate.document(title=f'{col} vs x,y')
+			nxny_plots_doc = dominate.document(title=f'{col} vs n_x,n_y {employee.pseudopath}')
+			xy_plots_doc = dominate.document(title=f'{col} vs x,y {employee.pseudopath}')
 			
 			averages.reset_index(inplace=True, drop=False)
 			averages.set_index(['n_y','n_x','n_channel'], inplace=True)
 			
 			if col in {'Amplitude (V)','Collected charge (V s)'}:
 				fig = px.imshow(
-					title = f'sum({col})<br><sup>{bureaucrat.run_name}</sup>',
+					title = f'sum({col})<br><sup>{employee.pseudopath}</sup>',
 					img = averages[col].groupby(['n_y','n_x']).sum().to_xarray(),
 					aspect = 'equal',
 					origin = 'lower',
@@ -153,7 +151,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 				
 				fig = px.scatter(
 					data_frame = averages.groupby(['n_y','n_x','x (m)','y (m)','n_position']).sum().reset_index(),
-					title = f'sum({col}) vs x,y<br><sup>{bureaucrat.run_name}</sup>',
+					title = f'sum({col}) vs x,y<br><sup>{employee.pseudopath}</sup>',
 					x = 'x (m)',
 					y = 'y (m)',
 					color = col,
@@ -176,7 +174,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 			
 			for n_channel in data.reset_index('n_channel')['n_channel'].drop_duplicates():
 				fig = px.imshow(
-					title = f'{col} vs n_x,n_y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
+					title = f'{col} vs n_x,n_y, n_channel={n_channel}<br><sup>{employee.pseudopath}</sup>',
 					img = averages.query(f'n_channel=={n_channel}').reset_index(drop=False).set_index(['n_x','n_y']).unstack('n_x')[col],
 					aspect = 'equal',
 					origin = 'lower',
@@ -194,7 +192,7 @@ def plot_everything_from_TCT_2D_scan(bureaucrat:RunBureaucrat, skip_check=False)
 				
 				fig = px.scatter(
 					data_frame = averages.query(f'n_channel=={n_channel}').reset_index(),
-					title = f'{col} vs x,y, n_channel={n_channel}<br><sup>{bureaucrat.run_name}</sup>',
+					title = f'{col} vs x,y, n_channel={n_channel}<br><sup>{employee.pseudopath}</sup>',
 					x = 'x (m)',
 					y = 'y (m)',
 					color = col,
@@ -231,7 +229,7 @@ def TCT_2D_scans_sweeping_bias_voltage(bureaucrat:RunBureaucrat, the_setup, volt
 				logging.info(f'Setting bias voltage to {voltage} V...')
 				the_setup.set_bias_voltage(volts=voltage)
 				
-				b = employee.create_subrun(f'{bureaucrat.run_name}_{int(voltage)}V')
+				b = employee.create_subrun(f'{int(voltage)}V')
 				try:
 					TCT_2D_scan(
 						bureaucrat = b,

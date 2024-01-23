@@ -116,18 +116,21 @@ if __name__ == '__main__':
 	with Alberto.handle_task('iv_curves', drop_old_data=False) as iv_curves_task_bureaucrat:
 		Mariano = iv_curves_task_bureaucrat.create_subrun(create_a_timestamp() + '_' + CURRENT_DUT_NAME.replace(' ','_'))
 		
-		iv_curve_measure(
-			bureaucrat = Mariano,
-			voltages = list(CONFIG_IV_CURVE['VOLTAGES']) + list(CONFIG_IV_CURVE['VOLTAGES'])[::-1],
-			current_limit_amperes = CONFIG_IV_CURVE['CURRENT_COMPLIANCE_AMPERES'],
-			n_measurements_per_voltage = 2,
-			time_between_each_measurement_seconds = .1,
-			time_after_changing_voltage_seconds = 1,
-			the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}'),
-			reporter = SafeTelegramReporter4Loops(
-				bot_token = my_telegram_bots.robobot.token, 
-				chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+		try:
+			iv_curve_measure(
+				bureaucrat = Mariano,
+				voltages = list(CONFIG_IV_CURVE['VOLTAGES']) + list(CONFIG_IV_CURVE['VOLTAGES'])[::-1],
+				current_limit_amperes = CONFIG_IV_CURVE['CURRENT_COMPLIANCE_AMPERES'],
+				n_measurements_per_voltage = 2,
+				time_between_each_measurement_seconds = .1,
+				time_after_changing_voltage_seconds = 1,
+				the_setup = connect_me_with_the_setup(who=f'iv_curve.py PID:{os.getpid()}'),
+				reporter = SafeTelegramReporter4Loops(
+					bot_token = my_telegram_bots.robobot.token, 
+					chat_id = my_telegram_bots.chat_ids['Robobot TCT setup'],
+				)
 			)
-		)
-		
-		iv_curve_plot(bureaucrat = Mariano)
+		except Exception as e:
+			raise e
+		finally:
+			iv_curve_plot(bureaucrat = Mariano)

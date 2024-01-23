@@ -45,7 +45,7 @@ class TheTCTSetup:
 		
 		# CAEN high voltage power supply ---
 		logging.info(f'Connecting with CAEN high voltage power supply...')
-		caen_power_supply = CAENDesktopHighVoltagePowerSupply(port='/dev/ttyACM4')
+		caen_power_supply = CAENDesktopHighVoltagePowerSupply(port='/dev/ttyACM1')
 		self._caen_high_voltage = OneCAENChannel(caen=caen_power_supply, channel_number=0)
 		logging.info(f'Connected with {repr(self._caen_high_voltage.idn)}')
 		
